@@ -1,93 +1,74 @@
-# Customer-Api
+# Customer-API | Crowdsourced Ideation Solution (CIS) - Phase 1: User Management API
 
+## 1. Introduction
+This repository contains **Phase 1** of the CIS project. The main objective is the transition from a CLI-based employee management system to a modern service-oriented architecture (**API-First**).
 
+This phase establishes a **User Management API** as the single source of truth, allowing coexistence with the legacy system without disrupting current operations.
+---
+## 2. Hybrid Technology Stack
+In accordance with architectural decisions and academic guidelines, the project uses a diversified stack:
+* **Main Backend (API):** Java with **Spring Boot** for service logic and persistence.
 
-## Getting started
+* **Integration/UI Components:** **C#/.NET** with Avalonia UI for administrative tools.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+* **Database:** **MySQL** (shared RDBMS) managed using **Docker**.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+* **Architecture:** RESTful API based on the HTTP standard.
 
-## Add your files
+---
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## 3. System Architecture (C4 Diagrams)
 
-```
-cd existing_repo
-git remote add origin https://gitlab.com/jala-university1/cohort-5/ES.CO.CSSD-232.GA.T1.26.M2/SB/grupo-2-ds3/customer-api.git
-git branch -M main
-git push -uf origin main
-```
+### 3.1 Level 1: Context
+The core user system interacts with Administrators and future Clients, maintaining data integrity with the Legacy CLI through the shared database.
 
-## Integrate with your tools
+### 3.2 Level 2: Containers
+Shows the coexistence of Spring Boot (Java) containers and .NET components accessing the same MySQL instance.
+---
 
-* [Set up project integrations](https://gitlab.com/jala-university1/cohort-5/ES.CO.CSSD-232.GA.T1.26.M2/SB/grupo-2-ds3/customer-api/-/settings/integrations)
+## 4. Development Strategy: API-First
+We adopt an **API-First** approach where the programming interface is central to the design.
 
-## Collaborate with your team
+* **Definition:** APIs are rules that enable data communication between programs.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+* **Prioritization:** By making the API the core component, we facilitate collaboration between the Java and C# teams, enabling component reuse.
 
-## Test and Deploy
+* **Benefit:** Ensures that all parties involved work on a standardized data contract before implementation.
 
-Use the built-in continuous integration in GitLab.
+---
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+## 5. Workflow and Code Quality Model
+### Branching Model (GitFlow)
+We follow the GitFlow model to maintain code traceability and stability:
+* **main**: Stable production code.
 
-***
+* **develop**: Continuous integration branch.
 
-# Editing this README
+* **feature/issue-ID-description**: Development of specific tasks linked to an issue.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Code Review Process
+* **Requirement:** Minimum **1 peer approval** to perform the merge.
 
-## Suggestions for a good README
+* **Restriction:** The author cannot approve their own Merge Request (MR).
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+* **Linking:** Every MR must include the `Closes #ID` instruction to automatically close the associated issue.
 
-## Name
-Choose a self-explaining name for your project.
+---
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 6. Technical Documentation (ADR)
+Key decisions are documented in `/docs/adr/`:
+* **ADR-001:** Initial Persistence Strategy (MySQL + Docker).
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+* **ADR-002:** Technology Stack Selection (Java/Spring Boot & .NET).
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+* **ADR-003:** REST Communication Style.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+---
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## 7. Development Environment Setup
+1. **Clone:** `git clone [REPO-URL]`
+2. **Docker:** Start the MySQL container: `docker-compose up -d`.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+3. **Database:** Import the `schema.sql` script into the local MySQL instance.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+4. **Environments:** Configure the JDK for Spring Boot and the .NET SDK for the C# components.

@@ -1,13 +1,17 @@
 package com.customer.controllers;
 
-import com.customer.models.User;
-import com.customer.repository.UserRepository;
+import java.util.Objects;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import java.util.UUID;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import com.customer.models.User;
+import com.customer.repository.UserRepository;
 
 @RestController
 @RequestMapping("/test_users")
@@ -16,13 +20,8 @@ public class UserController {
     private UserRepository userRepository;
 
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user){
-        if (user.getId() == null || user.getId().isEmpty()){
-            user.setId(UUID.randomUUID().toString());
-        }
-
-        User saved = userRepository.save(user);
-        return 
-        ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(userRepository.save(Objects.requireNonNull(user)));
     }
 }

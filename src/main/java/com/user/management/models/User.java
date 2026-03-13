@@ -1,4 +1,4 @@
-package com.customer.models;
+package com.user.management.models;
 import org.hibernate.annotations.UuidGenerator;
 
 import jakarta.persistence.*;

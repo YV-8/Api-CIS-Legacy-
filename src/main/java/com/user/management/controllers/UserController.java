@@ -1,4 +1,4 @@
-package com.customer.controllers;
+package com.user.management.controllers;
 
 import java.util.Objects;
 
@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.customer.models.User;
-import com.customer.repository.UserRepository;
+import com.user.management.models.User;
+import com.user.management.repository.UserRepository;
 
 @RestController
 @RequestMapping("/test_users")

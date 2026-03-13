@@ -23,7 +23,7 @@ services:
 
   app:
     build: .
-    container_name: customer_api
+    container_name: user_management_api
     restart: always
     ports:
       - "8080:8080"

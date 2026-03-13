@@ -8,11 +8,11 @@
 		<version>3.5.12-SNAPSHOT</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.customer</groupId>
-    <artifactId>customer-management</artifactId>
+	<groupId>com.user.management</groupId>
+    <artifactId>user-management</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>Customer</name>
-	<description>Managment the customers</description>
+	<name>User</name>
+	<description>Management the users</description>
 	<url/>
 	<licenses>
 		<license/>

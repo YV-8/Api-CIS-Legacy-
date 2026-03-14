@@ -14,7 +14,7 @@ import com.user.management.models.User;
 public class UserService {
 
     @Autowired
-    private  ModelMapper modelMapper;
+    private ModelMapper modelMapper;
 
     @Autowired
     private UserRepository userRepository;

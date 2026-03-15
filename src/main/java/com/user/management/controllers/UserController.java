@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.user.management.dtos.UserResponseDTO;
 import jakarta.validation.Valid;
 import com.user.management.services.UserService;
-import com.user.management.models.User;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,7 +23,7 @@ public class UserController {
     @Autowired
     private UserService userService;
     @PostMapping
-    public ResponseEntity<?> saveUser(@Valid @RequestBody User user) {
+    public ResponseEntity<UserResponseDTO> saveUser(@Valid @RequestBody UserResponseDTO user) {
         UserResponseDTO savedUser = userService.saveUser(user);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
     }

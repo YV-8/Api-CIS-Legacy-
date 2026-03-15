@@ -19,17 +19,12 @@ public class UserService {
     @Autowired
     private UserRepository userRepository;
 
-    public UserResponseDTO saveUser(User user) {
+    public UserResponseDTO saveUser(UserResponseDTO user) {
         
-        if (user.getName() == null || user.getName().isBlank() || 
-        user.getLogin() == null || user.getLogin().isBlank() ||
-        user.getPassword() == null || user.getPassword().isBlank()) {
-            //return ResponseEntity.status(400).body("Don't Find the name or login");
-            throw new IllegalArgumentException("Dont Find the name or login or password");
-        }
+        User userEntity = modelMapper.map(user, User.class);
         
-    
-        User saveUser = userRepository.save(user);
+
+        User saveUser = userRepository.save(userEntity);
         return modelMapper.map(saveUser, UserResponseDTO.class);
     }
 

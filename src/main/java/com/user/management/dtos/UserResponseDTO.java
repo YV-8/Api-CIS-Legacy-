@@ -9,13 +9,13 @@ import lombok.Setter;
 public class UserResponseDTO {
     private String id;
 
-    @NotBlank(message = "El nombre es obligatorio")
+    @NotBlank(message = "Name is required")
     private String name;
 
-    @NotBlank(message = "El login es obligatorio")
+    @NotBlank(message = "Login is required")
     private String login;
 
-    @NotBlank(message = "La contraseña es obligatoria")
+    @NotBlank(message = "Password is required")
     private String password;
 
 }

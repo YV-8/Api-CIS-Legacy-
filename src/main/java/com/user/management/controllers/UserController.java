@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
 import jakarta.validation.Valid;
 import com.user.management.services.UserService;
@@ -23,7 +24,7 @@ public class UserController {
     @Autowired
     private UserService userService;
     @PostMapping
-    public ResponseEntity<UserResponseDTO> saveUser(@Valid @RequestBody UserResponseDTO user) {
+    public ResponseEntity<UserResponseDTO> saveUser(@Valid @RequestBody UserRequestDTO user) {
         UserResponseDTO savedUser = userService.saveUser(user);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
     }

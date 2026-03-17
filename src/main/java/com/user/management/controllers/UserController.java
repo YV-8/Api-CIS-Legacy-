@@ -5,8 +5,6 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
@@ -37,7 +35,8 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<UserResponseDTO> deleteUserById(@PathVariable String id) {
-        return ResponseEntity.ok(userService.deleteUserById(id));
+    public ResponseEntity<?> deleteUserById(@PathVariable String id) {
+        userService.deleteUserById(id);
+        return ResponseEntity.noContent().build();
     }
 }

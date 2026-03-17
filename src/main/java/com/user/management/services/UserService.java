@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.dtos.UserRequestDTO;
@@ -23,8 +24,6 @@ public class UserService {
     public UserResponseDTO saveUser(UserRequestDTO user) {
         
         User userEntity = modelMapper.map(user, User.class);
-        
-
         User saveUser = userRepository.save(userEntity);
         return modelMapper.map(saveUser, UserResponseDTO.class);
     }
@@ -42,11 +41,11 @@ public class UserService {
         return modelMapper.map(user, UserResponseDTO.class);
     }
 
-    public UserResponseDTO deleteUserById(String id) {
-        User user = userRepository.findById(id)
-            .orElseThrow(() -> new UserNotFoundException("Usuario con id '" + id + "' no encontrado"));
-        UserResponseDTO response = modelMapper.map(user, UserResponseDTO.class);
-        userRepository.deleteById(user.getId());
-        return response;
+    @Transactional
+    public void deleteUserById(String id) {
+        if (!userRepository.existsById(id)) {
+            throw new UserNotFoundException("Usuario con id '" + id + "' no encontrado");
+        }
+        userRepository.deleteById(id);
     }
 }

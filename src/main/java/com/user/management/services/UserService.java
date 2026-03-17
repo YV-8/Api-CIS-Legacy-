@@ -42,4 +42,11 @@ public class UserService {
         return modelMapper.map(user, UserResponseDTO.class);
     }
 
+    public UserResponseDTO deleteUserById(String id) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new UserNotFoundException("Usuario con id '" + id + "' no encontrado"));
+        UserResponseDTO response = modelMapper.map(user, UserResponseDTO.class);
+        userRepository.deleteById(user.getId());
+        return response;
+    }
 }

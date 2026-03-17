@@ -6,6 +6,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
@@ -35,6 +36,12 @@ public class UserService {
                 .toList();
     }
 
+    public UserResponseDTO getUserById(String id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User with id " + id + " was not found"));
+        return modelMapper.map(user, UserResponseDTO.class);
+    }
+
     public UserResponseDTO updateUser(String id, UserRequestDTO request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
@@ -61,9 +68,11 @@ public class UserService {
         return modelMapper.map(updatedUser, UserResponseDTO.class);
     }
 
-    public UserResponseDTO getUserById(String id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("User with id " + id + " was not found"));
-        return modelMapper.map(user, UserResponseDTO.class);
+    @Transactional
+    public void deleteUserById(String id) {
+        if (!userRepository.existsById(id)) {
+            throw new UserNotFoundException("Usuario con id '" + id + "' no encontrado");
+        }
+        userRepository.deleteById(id);
     }
 }

@@ -109,7 +109,7 @@ CLI creates a new user directly in the database.
 
 **Request:**
 ```http
-GET http://localhost:8080/v1/users
+GET http://localhost:8081/v1/users
 ```
 
 **Response `200 OK`:**
@@ -139,7 +139,7 @@ CLI updates existing user without errors.
 
 **Request:**
 ```http
-DELETE http://localhost:8080/v1/users/5f4933e8-0431-4d36-a2d6-5743c5160e84
+DELETE http://localhost:8081/v1/users/5f4933e8-0431-4d36-a2d6-5743c5160e84
 ```
 
 **Response `204 No Content`**

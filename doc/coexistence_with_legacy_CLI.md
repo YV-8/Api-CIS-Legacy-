@@ -13,13 +13,12 @@
 | Database | MySQL 8 via Docker Compose (`sd3_mysql`) |
 | Schema | `sd3`.`users` |
 | CLI | Java Maven project — `jalau.cis.UsersCLI` |
-| API | Spring Boot — `user_management_api` |
+| API | Spring Boot — `user_management_ms` |
 | DB Port | `3307:3306` |
 
 Docker Compose services running:
 
-![alt text](image.png)
-
+![alt text](./images/image-9.png)
 ---
 
 ## 2. Legacy CLI — No Code Modifications
@@ -47,7 +46,7 @@ mvn compile exec:java -Dexec.mainClass="jalau.cis.UsersCLI" -Dexec.args="-config
 
 **Output:**
 
-![alt text](image-1.png)
+![alt text](./images/image-1.png)
 
 CLI operates correctly against the database.
 
@@ -69,7 +68,7 @@ Content-Type: application/json
 
 **Response `201 Created`:**
 
-![alt text](image-2.png)
+![alt text](./images/image-2.png)
 
 API creates user successfully in the shared `sd3` database.
 
@@ -84,7 +83,7 @@ mvn compile exec:java -Dexec.mainClass="jalau.cis.UsersCLI" -Dexec.args="-config
 
 **Output:**
 
-![alt text](image-3.png)
+![alt text](./images/image-3.png)
 
 CLI correctly reads the user created by the API — cross-functional operation confirmed.
 
@@ -99,7 +98,7 @@ mvn compile exec:java -Dexec.mainClass="jalau.cis.UsersCLI" -Dexec.args="-config
 
 **Output:**
 
-![alt text](image-4.png)
+![alt text](./images/image-4.png)
 
 CLI creates a new user directly in the database.
 
@@ -109,12 +108,12 @@ CLI creates a new user directly in the database.
 
 **Request:**
 ```http
-GET http://localhost:8080/v1/users
+GET http://localhost:8081/v1/users
 ```
 
 **Response `200 OK`:**
 
-![alt text](image-5.png)
+![alt text](./images/image-5.png)
 
 API correctly reads the user created by the CLI — cross-functional operation confirmed.
 
@@ -129,7 +128,7 @@ mvn compile exec:java -Dexec.mainClass="jalau.cis.UsersCLI" -Dexec.args="-config
 
 **Output:**
 
-![alt text](image-6.png)
+![alt text](./images/image-6.png)
 
 CLI updates existing user without errors.
 
@@ -139,12 +138,12 @@ CLI updates existing user without errors.
 
 **Request:**
 ```http
-DELETE http://localhost:8080/v1/users/5f4933e8-0431-4d36-a2d6-5743c5160e84
+DELETE http://localhost:8081/v1/users/5f4933e8-0431-4d36-a2d6-5743c5160e84
 ```
 
 **Response `204 No Content`**
 
-![alt text](image-7.png)
+![alt text](./images/image-7.png)
 API deletes the user created by the CLI.
 
 ---
@@ -158,7 +157,7 @@ mvn compile exec:java -Dexec.mainClass="jalau.cis.UsersCLI" -Dexec.args="-config
 
 **Output:**
 
-![alt text](image-8.png)
+![alt text](./images/image-8.png)
 
 CLI reflects all changes made by the API — final state is consistent.
 

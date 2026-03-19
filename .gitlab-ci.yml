@@ -1,0 +1,14 @@
+stages:
+  - validate
+
+validate_lab:
+  stage: validate
+  image: alpine:latest
+  script:
+    - echo "Running CI validation..."
+    - test -f README.md
+    - echo "README.md found"
+    - echo "CI pipeline completed successfully"
+  only:
+    - branches
+    - merge_requests

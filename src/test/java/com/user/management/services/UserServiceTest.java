@@ -4,6 +4,9 @@ import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
 import com.user.management.models.User;
 import com.user.management.repository.UserRepository;
+import com.user.management.exceptions.UserNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.modelmapper.ModelMapper;
@@ -119,4 +122,46 @@ class UserServiceTest {
 
         verify(userRepository).deleteById("1");
     }
+
+    @Test
+    void saveUser_shouldThrowExceptionWhenLoginAlreadyExists() {
+    UserRequestDTO request = new UserRequestDTO();
+    request.setName("David");
+    request.setLogin("david");
+    request.setPassword("1234");
+
+    User userEntity = new User(null, "David", "david", "1234");
+
+    when(modelMapper.map(request, User.class)).thenReturn(userEntity);
+    when(userRepository.save(userEntity))
+            .thenThrow(new DataIntegrityViolationException("Login already exists"));
+
+    assertThrows(DataIntegrityViolationException.class, () -> userService.saveUser(request));
+}
+
+@Test
+void getUserById_shouldThrowExceptionWhenUserDoesNotExist() {
+    when(userRepository.findById("99")).thenReturn(Optional.empty());
+
+    assertThrows(UserNotFoundException.class, () -> userService.getUserById("99"));
+}
+
+    @Test
+    void updateUser_shouldThrowExceptionWhenUserDoesNotExist() {
+    UserRequestDTO request = new UserRequestDTO();
+    request.setName("David Updated");
+    request.setLogin("david2");
+    request.setPassword("5678");
+
+    when(userRepository.findById("99")).thenReturn(Optional.empty());
+
+    assertThrows(UserNotFoundException.class, () -> userService.updateUser("99", request));
+}
+
+    @Test
+    void deleteUserById_shouldThrowExceptionWhenUserAlreadyDeleted() {
+    when(userRepository.existsById("99")).thenReturn(false);
+
+    assertThrows(UserNotFoundException.class, () -> userService.deleteUserById("99"));
+}
 }

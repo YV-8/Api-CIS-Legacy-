@@ -16,12 +16,15 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
+import com.user.management.exceptions.UserNotFoundException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -113,4 +116,54 @@ class UserControllerTest {
         mockMvc.perform(delete("/v1/users/1"))
                 .andExpect(status().isNoContent());
     }
+
+    @Test
+void saveUser_shouldReturnConflictWhenLoginAlreadyExists() throws Exception {
+    UserRequestDTO request = new UserRequestDTO();
+    request.setName("David");
+    request.setLogin("david");
+    request.setPassword("1234");
+
+    when(userService.saveUser(any(UserRequestDTO.class)))
+            .thenThrow(new DataIntegrityViolationException("Login already exists"));
+
+    mockMvc.perform(post("/v1/users")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isConflict());
+}
+
+    @Test
+    void getUserById_shouldReturnNotFoundWhenUserDoesNotExist() throws Exception {
+    when(userService.getUserById("99"))
+            .thenThrow(new UserNotFoundException("User with id 99 was not found"));
+
+    mockMvc.perform(get("/v1/users/99"))
+            .andExpect(status().isNotFound());
+}
+
+    @Test
+    void updateUser_shouldReturnNotFoundWhenUserDoesNotExist() throws Exception {
+    UserRequestDTO request = new UserRequestDTO();
+    request.setName("David Updated");
+    request.setLogin("david2");
+    request.setPassword("5678");
+
+    when(userService.updateUser(eq("99"), any(UserRequestDTO.class)))
+            .thenThrow(new UserNotFoundException("User not found with id: 99"));
+
+    mockMvc.perform(put("/v1/users/99")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isNotFound());
+}
+
+   @Test
+    void deleteUser_shouldReturnNotFoundWhenUserAlreadyDeleted() throws Exception {
+    doThrow(new UserNotFoundException("Usuario con id '99' no encontrado"))
+            .when(userService).deleteUserById("99");
+
+    mockMvc.perform(delete("/v1/users/99"))
+            .andExpect(status().isNotFound());
+}
 }

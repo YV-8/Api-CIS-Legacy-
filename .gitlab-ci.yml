@@ -1,14 +1,43 @@
 stages:
-  - validate
+  - test
+  - coverage
+  - build
 
-validate_lab:
-  stage: validate
-  image: alpine:latest
+unit_tests:
+  stage: test
+  image: maven:3.9.9-eclipse-temurin-21
   script:
-    - echo "Running CI validation..."
-    - test -f README.md
-    - echo "README.md found"
-    - echo "CI pipeline completed successfully"
+    - echo "Running unit tests..."
+    - mvn test
+    - echo "Unit tests completed successfully"
   only:
-    - branches
+    - main
+    - develop
+    - /^feature\/.*$/
     - merge_requests
+
+coverage:
+  stage: coverage
+  image: maven:3.9.9-eclipse-temurin-21
+  script:
+    - echo "Running coverage stage..."
+    - mvn test
+    - echo "Coverage stage completed"
+  only:
+    - main
+    - develop
+    - /^feature\/.*$/
+    - merge_requests
+
+build_image:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - echo "Building Docker image..."
+    - docker build -t customer-api:latest .
+    - echo "Docker image built successfully"
+  only:
+    - main
+    - tags

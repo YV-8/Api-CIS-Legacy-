@@ -1,30 +1,41 @@
 package com.user.management.services;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
+import com.user.management.enums.Role;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.models.User;
 import com.user.management.repository.UserRepository;
 
+import lombok.AllArgsConstructor;
+
 @Service
-public class UserService {
+@AllArgsConstructor
+public class UserService implements UserDetailsService {
 
-    @Autowired
-    private ModelMapper modelMapper;
-
-    @Autowired
-    private UserRepository userRepository;
+    private final ModelMapper modelMapper;
+    private final UserRepository userRepository;  
+    private final PasswordEncoder passwordEncoder;
 
     public UserResponseDTO saveUser(UserRequestDTO user) {
         User userEntity = modelMapper.map(user, User.class);
+        userEntity.setRole(Role.USER);
+        userEntity.setPassword(passwordEncoder.encode(user.getPassword()));
+
         User savedUser = userRepository.save(userEntity);
         return modelMapper.map(savedUser, UserResponseDTO.class);
     }
@@ -71,8 +82,26 @@ public class UserService {
     @Transactional
     public void deleteUserById(String id) {
         if (!userRepository.existsById(id)) {
-            throw new UserNotFoundException("Usuario con id '" + id + "' no encontrado");
+            throw new UserNotFoundException("User with id '" + id + "' not found");
         }
         userRepository.deleteById(id);
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+
+        Optional<User> userOptional = userRepository.findByLogin(username);
+
+        if (userOptional.isEmpty()) {
+            throw new UsernameNotFoundException("User not found with login: " + username);
+        }
+
+        User user = userOptional.get();
+
+        return org.springframework.security.core.userdetails.User.builder()
+                .username(user.getLogin())
+                .password(user.getPassword())
+                .authorities(List.of(new SimpleGrantedAuthority("ROLE_"+user.getRole().name())))
+                .build();
     }
 }

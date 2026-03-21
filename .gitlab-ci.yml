@@ -1,0 +1,63 @@
+stages:
+  - test
+  - coverage
+  - build
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+
+cache:
+  paths:
+    - .m2/repository
+
+unit_tests:
+  stage: test
+  image: maven:3.9.9-eclipse-temurin-21
+  script:
+    - echo "Running unit tests..."
+    - mvn clean test
+    - echo "Unit tests completed successfully"
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - target/surefire-reports/TEST-*.xml
+    paths:
+      - target/surefire-reports/
+  only:
+    - main
+    - develop
+    - /^feature\/.*$/
+    - merge_requests
+
+coverage:
+  stage: coverage
+  image: maven:3.9.9-eclipse-temurin-21
+  script:
+    - echo "Generating coverage report..."
+    - mvn clean test jacoco:report
+    - echo "Coverage report generated"
+  artifacts:
+    when: always
+    paths:
+      - target/site/jacoco/
+  only:
+    - main
+    - develop
+    - /^feature\/.*$/
+    - merge_requests
+
+build_image:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - echo "Building Docker image..."
+    - docker build -t customer-api:latest .
+    - echo "Docker image built successfully"
+  only:
+    - main
+    - tags

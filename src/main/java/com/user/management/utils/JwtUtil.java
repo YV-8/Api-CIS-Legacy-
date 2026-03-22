@@ -55,7 +55,7 @@ public class JwtUtil {
                 .getPayload();
     }
 
-    public String extractEmail(String token) {
+    public String extractLogin(String token) {
         return extractAllClaims(token).getSubject();
     }
 

@@ -7,7 +7,4 @@ import com.user.management.models.User;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, String> {
-    Optional<User> findByLogin(String login);
-    boolean existsByLogin(String login);
-    boolean existsByLoginAndIdNot(String login, String id);
 }

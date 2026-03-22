@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -15,12 +16,10 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 
 import org.springframework.security.config.http.SessionCreationPolicy;
-
 import org.springframework.security.core.userdetails.UserDetailsService;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
 import org.springframework.security.web.SecurityFilterChain;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,7 +30,6 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
-
     public SecurityConfig(@Lazy UserDetailsService userDetailsService) {
         this.userDetailsService = userDetailsService;
     }
@@ -42,7 +40,6 @@ public class SecurityConfig {
         http
             // CSRF OFF (solo porque usamos JWT)
             .csrf(csrf -> csrf.disable())
-
             // CORS (activar si frontend separado)
             .cors(cors -> {})
 
@@ -66,21 +63,19 @@ public class SecurityConfig {
             // Autorización
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/v1/auth/**").permitAll()
-                //.requestMatchers(HttpMethod.POST, "/users").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers( HttpMethod.POST,"/v1/users/**").hasAnyRole("ADMIN", "OWNER")
+                .requestMatchers(HttpMethod.PUT, "/v1/users/**").hasAnyRole("ADMIN", "OWNER")
+                .requestMatchers(HttpMethod.DELETE, "/v1/users/**").hasAnyRole("ADMIN", "OWNER")
+                .requestMatchers(HttpMethod.GET, "/v1/users/**").hasAnyRole("USER", "ADMIN", "OWNER")
                 .anyRequest().authenticated()
             )
 
             // Provider
             .authenticationProvider(authenticationProvider());
-
-            // JWT Filter (CLAVE)
-            //.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 
-    // 🔧 Helper para respuestas JSON
+    // Helper para respuestas JSON
     private void buildErrorResponse(HttpServletResponse response, int status, String error, String message)
             throws java.io.IOException {
 

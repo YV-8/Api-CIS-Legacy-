@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.user.management.dtos.LoginRequestDTO;
 import com.user.management.dtos.LoginResponseDTO;
@@ -38,6 +39,11 @@ class AuthServiceTest {
 
     @InjectMocks
     private AuthService authService;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(authService, "expiration", 3600000L);
+    }
 
     @Test
     void login_validCredentials_shouldReturnTokenData() {

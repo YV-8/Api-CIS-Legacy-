@@ -1,51 +1,5 @@
-package com.user.management.utils;package com.user.management.utils;
+package com.user.management.utils;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}    }        assertFalse(jwtUtil.isTokenValid("invalid.token.here"));    void invalidToken_shouldBeInvalid() {    @Test    }        assertTrue(jwtUtil.isTokenExpired(token));        String token = jwtUtil.generateToken("user1", Role.USER);        ReflectionTestUtils.setField(jwtUtil, "expiration", -1000L);    void expiredToken_shouldBeMarkedExpired_andInvalidInExpiredCheck() {    @Test    }        assertFalse(jwtUtil.isTokenExpired(token));        assertTrue(jwtUtil.isTokenValid(token));        assertEquals(Role.USER, jwtUtil.extractRole(token));        assertEquals("user1", jwtUtil.extractLogin(token));        assertNotNull(token);        String token = jwtUtil.generateToken("user1", Role.USER);    void generateAndExtractClaims_shouldWork() {    @Test    }        ReflectionTestUtils.setField(jwtUtil, "expiration", 1000L);        ReflectionTestUtils.setField(jwtUtil, "secret", "01234567890123456789012345678901");        jwtUtil = new JwtUtil();    void setUp() {    @BeforeEach    private JwtUtil jwtUtil;class JwtUtilTest {import com.user.management.enums.Role;import org.springframework.test.util.ReflectionTestUtils;import org.junit.jupiter.api.Test;import org.junit.jupiter.api.BeforeEach;import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.BeforeEach;

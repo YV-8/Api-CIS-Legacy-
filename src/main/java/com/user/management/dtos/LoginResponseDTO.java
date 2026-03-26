@@ -10,5 +10,6 @@ import lombok.*;
 public class LoginResponseDTO {
     private String token;
     private String type;       
-    private long expiresIn;    
+    private long expiresIn;  
+    private String role;  
 }

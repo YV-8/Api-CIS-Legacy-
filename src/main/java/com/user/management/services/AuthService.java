@@ -47,6 +47,7 @@ public class AuthService {
                 .token(token)
                 .type("Bearer")
                 .expiresIn(expiration)
+                .role(user.getRole().getValue())
                 .build();
     }
 

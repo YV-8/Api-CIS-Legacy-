@@ -83,6 +83,12 @@ public class SecurityConfig {
                                 .requestMatchers(HttpMethod.PUT, "/v1/users/**").hasAnyRole("ADMIN", "OWNER", "USER")
                                 .requestMatchers(HttpMethod.DELETE, "/v1/users/**").hasAnyRole("ADMIN", "OWNER")
                                 .requestMatchers(HttpMethod.GET, "/v1/users/**").hasAnyRole("USER", "ADMIN", "OWNER")
+                                .requestMatchers(
+                                        "/v3/api-docs/**",
+                                        "/swagger-ui/**",
+                                        "/swagger-ui.html",
+                                        "/v3/api-docs.yaml"
+                                ).permitAll()
                                 .anyRequest().authenticated(); // Seguridad activa
                     }
                 }

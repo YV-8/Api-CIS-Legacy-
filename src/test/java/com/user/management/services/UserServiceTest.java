@@ -2,10 +2,12 @@ package com.user.management.services;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
+import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.enums.Role;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.models.User;
 import com.user.management.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.modelmapper.ModelMapper;
@@ -18,12 +20,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -40,16 +38,29 @@ class UserServiceTest {
     @InjectMocks
     private UserService userService;
 
-    @Test
-    void saveUser_shouldReturnSavedUser() {
-        UserRequestDTO request = new UserRequestDTO();
+    private UserRequestDTO request;
+    private UserUpdateRequestDTO updateRequest;
+
+    @BeforeEach
+    void setUp() {
+        request = new UserRequestDTO();
         request.setName("David");
         request.setLogin("david");
         request.setPassword("1234");
+        request.setRole("user");
 
+        updateRequest = new UserUpdateRequestDTO();
+        updateRequest.setName("David Updated");
+        updateRequest.setLogin("david2");
+        updateRequest.setPassword("5678");
+        updateRequest.setRole("admin");
+    }
+
+    @Test
+    void saveUser_shouldReturnSavedUser() {
         User userEntity = new User(null, "David", "david", "1234", Role.USER);
         User savedUser = new User("1", "David", "david", "encoded1234", Role.USER);
-        UserResponseDTO response = new UserResponseDTO("1", "David", "david");
+        UserResponseDTO response = new UserResponseDTO("1", "David", "david", "USER");
 
         when(modelMapper.map(request, User.class)).thenReturn(userEntity);
         when(passwordEncoder.encode("1234")).thenReturn("encoded1234");
@@ -62,14 +73,15 @@ class UserServiceTest {
         assertEquals("1", result.getId());
         assertEquals("David", result.getName());
         assertEquals("david", result.getLogin());
+        assertEquals("USER", result.getRole());
 
-        verify(userRepository).save(userEntity);
+        verify(userRepository, times(1)).save(userEntity);
     }
 
     @Test
     void getAllUsers_shouldReturnUsersList() {
         User user = new User("1", "David", "david", "1234", Role.USER);
-        UserResponseDTO response = new UserResponseDTO("1", "David", "david");
+        UserResponseDTO response = new UserResponseDTO("1", "David", "david", "USER");
 
         when(userRepository.findAll()).thenReturn(List.of(user));
         when(modelMapper.map(user, UserResponseDTO.class)).thenReturn(response);
@@ -77,14 +89,16 @@ class UserServiceTest {
         List<UserResponseDTO> result = userService.getAllUsers();
 
         assertEquals(1, result.size());
+        assertEquals("1", result.get(0).getId());
         assertEquals("David", result.get(0).getName());
         assertEquals("david", result.get(0).getLogin());
+        assertEquals("USER", result.get(0).getRole());
     }
 
     @Test
     void getUserById_shouldReturnUser() {
         User user = new User("1", "David", "david", "1234", Role.USER);
-        UserResponseDTO response = new UserResponseDTO("1", "David", "david");
+        UserResponseDTO response = new UserResponseDTO("1", "David", "david", "USER");
 
         when(userRepository.findById("1")).thenReturn(Optional.of(user));
         when(modelMapper.map(user, UserResponseDTO.class)).thenReturn(response);
@@ -94,81 +108,65 @@ class UserServiceTest {
         assertEquals("1", result.getId());
         assertEquals("David", result.getName());
         assertEquals("david", result.getLogin());
+        assertEquals("USER", result.getRole());
     }
 
     @Test
-    void updateUser_shouldUpdateExistingUser() {
-        User existingUser = new User("1", "David", "david", "1234", Role.USER);
-
-        UserRequestDTO request = new UserRequestDTO();
-        request.setName("David Updated");
-        request.setLogin("david2");
-        request.setPassword("5678");
-
-        User updatedUser = new User("1", "David Updated", "david2", "5678", Role.USER);
-        UserResponseDTO response = new UserResponseDTO("1", "David Updated", "david2");
-
-        when(userRepository.findById("1")).thenReturn(Optional.of(existingUser));
-        when(userRepository.existsByLoginAndIdNot("david2", "1")).thenReturn(false);
-        when(userRepository.save(existingUser)).thenReturn(updatedUser);
-        when(modelMapper.map(updatedUser, UserResponseDTO.class)).thenReturn(response);
-
-        UserResponseDTO result = userService.updateUser("1", request);
-
-        assertEquals("David Updated", result.getName());
-        assertEquals("david2", result.getLogin());
-    }
-
-    @Test
-    void deleteUserById_shouldDeleteUser() {
-        when(userRepository.existsById("1")).thenReturn(true);
-        doNothing().when(userRepository).deleteById("1");
-
-        userService.deleteUserById("1");
-
-        verify(userRepository).deleteById("1");
-    }
-
-    @Test
-    void saveUser_shouldThrowExceptionWhenLoginAlreadyExists() {
-        UserRequestDTO request = new UserRequestDTO();
-        request.setName("David");
-        request.setLogin("david");
-        request.setPassword("1234");
-
-        User userEntity = new User(null, "David", "david", "1234", Role.USER);
-
-        when(modelMapper.map(request, User.class)).thenReturn(userEntity);
-        when(passwordEncoder.encode("1234")).thenReturn("encoded1234");
-        when(userRepository.save(userEntity))
-                .thenThrow(new DataIntegrityViolationException("Login already exists"));
-
-        assertThrows(DataIntegrityViolationException.class, () -> userService.saveUser(request));
-    }
-
-    @Test
-    void getUserById_shouldThrowExceptionWhenUserDoesNotExist() {
+    void getUserById_notFound_shouldThrow() {
         when(userRepository.findById("99")).thenReturn(Optional.empty());
 
         assertThrows(UserNotFoundException.class, () -> userService.getUserById("99"));
     }
 
     @Test
-    void updateUser_shouldThrowExceptionWhenUserDoesNotExist() {
-        UserRequestDTO request = new UserRequestDTO();
-        request.setName("David Updated");
-        request.setLogin("david2");
-        request.setPassword("5678");
+    void updateUser_shouldUpdateExistingUser() {
+        User existingUser = new User("1", "David", "david", "1234", Role.USER);
+        User savedUser = new User("1", "David Updated", "david2", "encoded5678", Role.ADMIN);
+        UserResponseDTO response = new UserResponseDTO("1", "David Updated", "david2", "ADMIN");
 
-        when(userRepository.findById("99")).thenReturn(Optional.empty());
+        when(userRepository.findById("1")).thenReturn(Optional.of(existingUser));
+        when(passwordEncoder.encode("5678")).thenReturn("encoded5678");
+        when(userRepository.save(existingUser)).thenReturn(savedUser);
+        when(modelMapper.map(savedUser, UserResponseDTO.class)).thenReturn(response);
 
-        assertThrows(UserNotFoundException.class, () -> userService.updateUser("99", request));
+        UserResponseDTO result = userService.updateUser("1", updateRequest);
+
+        assertEquals("David Updated", result.getName());
+        assertEquals("david2", result.getLogin());
+        assertEquals("ADMIN", result.getRole());
+        verify(userRepository, times(1)).save(existingUser);
     }
 
     @Test
-    void deleteUserById_shouldThrowExceptionWhenUserAlreadyDeleted() {
+    void updateUser_whenNotFound_shouldThrow() {
+        when(userRepository.findById("99")).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class, () -> userService.updateUser("99", updateRequest));
+    }
+
+    @Test
+    void deleteUserById_shouldDeleteUser() {
+        when(userRepository.existsById("1")).thenReturn(true);
+
+        assertDoesNotThrow(() -> userService.deleteUserById("1"));
+        verify(userRepository, times(1)).deleteById("1");
+    }
+
+    @Test
+    void deleteUserById_notFound_shouldThrow() {
         when(userRepository.existsById("99")).thenReturn(false);
 
         assertThrows(UserNotFoundException.class, () -> userService.deleteUserById("99"));
+    }
+
+    @Test
+    void saveUser_whenLoginAlreadyExists_shouldThrow() {
+        User userEntity = new User(null, "David", "david", "1234", Role.USER);
+
+        when(modelMapper.map(request, User.class)).thenReturn(userEntity);
+        when(passwordEncoder.encode("1234")).thenReturn("encoded1234");
+        when(userRepository.save(userEntity)).thenThrow(new DataIntegrityViolationException("Login already exists"));
+
+        assertThrows(DataIntegrityViolationException.class, () -> userService.saveUser(request));
     }
 }

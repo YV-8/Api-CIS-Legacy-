@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
+import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.services.UserService;
 
 import jakarta.validation.Valid;
@@ -40,7 +41,7 @@ public class UserController {
     @PutMapping("/{id}")
     public ResponseEntity<UserResponseDTO> updateUser(
             @PathVariable String id,
-            @Valid @RequestBody UserRequestDTO request) {
+            @Valid @RequestBody UserUpdateRequestDTO request) {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 

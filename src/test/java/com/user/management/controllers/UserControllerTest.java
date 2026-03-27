@@ -3,6 +3,7 @@ package com.user.management.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
+import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.filters.JwtAuthFilter;
 import com.user.management.services.UserService;
@@ -68,7 +69,7 @@ class UserControllerTest {
         request.setLogin("david");
         request.setPassword("1234");
 
-        UserResponseDTO response = new UserResponseDTO("1", "David", "david");
+        UserResponseDTO response = new UserResponseDTO("1", "David", "david", "USER");
 
         when(userService.saveUser(any(UserRequestDTO.class))).thenReturn(response);
 
@@ -81,7 +82,7 @@ class UserControllerTest {
     @Test
     void getAllUsers_shouldReturnOk() throws Exception {
         when(userService.getAllUsers()).thenReturn(
-                List.of(new UserResponseDTO("1", "David", "david"))
+                List.of(new UserResponseDTO("1", "David", "david", "USER"))
         );
 
         mockMvc.perform(get("/v1/users"))
@@ -91,7 +92,7 @@ class UserControllerTest {
     @Test
     void getUserById_shouldReturnOk() throws Exception {
         when(userService.getUserById("1"))
-                .thenReturn(new UserResponseDTO("1", "David", "david"));
+                .thenReturn(new UserResponseDTO("1", "David", "david", "USER"));
 
         mockMvc.perform(get("/v1/users/1"))
                 .andExpect(status().isOk());
@@ -99,13 +100,13 @@ class UserControllerTest {
 
     @Test
     void updateUser_shouldReturnOk() throws Exception {
-        UserRequestDTO request = new UserRequestDTO();
+        UserUpdateRequestDTO request = new UserUpdateRequestDTO();
         request.setName("David Updated");
         request.setLogin("david2");
         request.setPassword("5678");
 
-        when(userService.updateUser(eq("1"), any(UserRequestDTO.class)))
-                .thenReturn(new UserResponseDTO("1", "David Updated", "david2"));
+        when(userService.updateUser(eq("1"), any(UserUpdateRequestDTO.class)))
+                .thenReturn(new UserResponseDTO("1", "David Updated", "david2", "USER"));
 
         mockMvc.perform(put("/v1/users/1")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -148,12 +149,12 @@ class UserControllerTest {
 
     @Test
     void updateUser_shouldReturnOkWhenUserDoesNotExist() throws Exception {
-        UserRequestDTO request = new UserRequestDTO();
+        UserUpdateRequestDTO request = new UserUpdateRequestDTO();
         request.setName("David Updated");
         request.setLogin("david2");
         request.setPassword("5678");
 
-        when(userService.updateUser(eq("99"), any(UserRequestDTO.class)))
+        when(userService.updateUser(eq("99"), any(UserUpdateRequestDTO.class)))
                 .thenThrow(new UserNotFoundException("User not found with id: 99"));
 
         mockMvc.perform(put("/v1/users/99")

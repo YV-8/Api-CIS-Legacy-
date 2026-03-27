@@ -1,17 +1,14 @@
 package com.user.management.dtos;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
-public class UserResponseDTO {
-    private String id;
+public class UserUpdateRequestDTO {
     private String name;
     private String login;
+    private String password;
     private String role;
 }

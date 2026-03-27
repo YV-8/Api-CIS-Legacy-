@@ -4,6 +4,10 @@
 This repository contains **Phase 1** of the CIS project. The main objective is the transition from a CLI-based employee management system to a modern service-oriented architecture (**API-First**).
 
 This phase establishes a **User Management API** as the single source of truth, allowing coexistence with the legacy system without disrupting current operations.
+
+### General Description
+
+The User Management API is a RESTful service built with Spring Boot that provides secure user management functionality. It supports user registration, authentication, and CRUD operations (Create, Read, Update, Delete) for users. The API implements JWT (JSON Web Token) based authentication and role-based authorization using Spring Security, ensuring secure access to resources. It includes comprehensive documentation via Swagger/OpenAPI for easy integration and testing.
 ---
 ## 2. Hybrid Technology Stack
 In accordance with architectural decisions and academic guidelines, the project uses a diversified stack:
@@ -72,3 +76,59 @@ Key decisions are documented in `/docs/adr/`:
 3. **Database:** Import the `schema.sql` script into the local MySQL instance.
 
 4. **Environments:** Configure the JDK for Spring Boot and the .NET SDK for the C# components.
+
+---
+
+## 8. Testing
+To run the unit and integration tests, execute the following command in the project root directory:
+
+```bash
+mvn test
+```
+
+This will run all tests and generate a coverage report using JaCoCo.
+
+---
+
+## 9. CI/CD
+The project follows the GitFlow branching model for continuous integration and deployment. Key practices include:
+* Merge requests require at least one peer approval.
+* Each merge request must be linked to an issue using `Closes #ID`.
+* Automated builds and tests can be configured in CI platforms like GitHub Actions or GitLab CI.
+
+---
+
+## 10. API Documentation (Swagger)
+The API includes comprehensive documentation via Swagger/OpenAPI. After starting the application, access the Swagger UI at:
+
+```
+http://localhost:8080/swagger-ui.html
+```
+
+The OpenAPI specification is available at:
+
+```
+http://localhost:8080/v3/api-docs
+```
+
+---
+
+## 11. Running with Docker
+To set up and run the database using Docker:
+
+1. Ensure Docker and Docker Compose are installed.
+2. From the project root directory, run:
+
+```bash
+docker-compose up -d
+```
+
+This starts the MySQL database container in detached mode.
+
+To run the Spring Boot application:
+
+```bash
+mvn spring-boot:run
+```
+
+The application will be available at `http://localhost:8080`.

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
+import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.enums.Role;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.models.User;
@@ -30,37 +31,43 @@ public class UserService implements UserDetailsService {
     private final UserRepository userRepository;  
     private final PasswordEncoder passwordEncoder;
 
+    @Transactional
     public UserResponseDTO saveUser(UserRequestDTO user) {
         User userEntity = modelMapper.map(user, User.class);
-        userEntity.setRole(Role.USER);
+        userEntity.setRole(Role.valueOf(user.getRole().toUpperCase()));
         userEntity.setPassword(passwordEncoder.encode(user.getPassword()));
 
         User savedUser = userRepository.save(userEntity);
-        return modelMapper.map(savedUser, UserResponseDTO.class);
+        UserResponseDTO responseDTO = modelMapper.map(savedUser, UserResponseDTO.class);
+        responseDTO.setRole(savedUser.getRole().getValue());
+        return responseDTO;
     }
 
     public List<UserResponseDTO> getAllUsers() {
         return userRepository.findAll()
                 .stream()
-                .map(user -> modelMapper.map(user, UserResponseDTO.class))
+                .map(user -> 
+                    {
+                        UserResponseDTO dto = modelMapper.map(user, UserResponseDTO.class);
+                        dto.setRole(user.getRole().getValue());
+                        return dto;
+                    }
+                )
                 .toList();
     }
 
     public UserResponseDTO getUserById(String id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User with id " + id + " was not found"));
-        return modelMapper.map(user, UserResponseDTO.class);
+        UserResponseDTO responseDTO = modelMapper.map(user, UserResponseDTO.class);
+        responseDTO.setRole(user.getRole().getValue());
+        return responseDTO;
     }
 
-    public UserResponseDTO updateUser(String id, UserRequestDTO request) {
+    @Transactional
+    public UserResponseDTO updateUser(String id, UserUpdateRequestDTO request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
-
-        if (request.getLogin() != null
-                && !request.getLogin().isBlank()
-                && userRepository.existsByLoginAndIdNot(request.getLogin(), id)) {
-            throw new DataIntegrityViolationException("Login already exists");
-        }
 
         if (request.getName() != null && !request.getName().isBlank()) {
             user.setName(request.getName());
@@ -71,11 +78,17 @@ public class UserService implements UserDetailsService {
         }
 
         if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            user.setPassword(request.getPassword());
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+
+        if(request.getRole() != null && !request.getRole().isBlank()) {
+            user.setRole(Role.valueOf(request.getRole().toUpperCase()));
         }
 
         User updatedUser = userRepository.save(user);
-        return modelMapper.map(updatedUser, UserResponseDTO.class);
+        UserResponseDTO responseDTO = modelMapper.map(updatedUser, UserResponseDTO.class);
+        responseDTO.setRole(updatedUser.getRole().getValue());
+        return responseDTO;
     }
 
     @Transactional

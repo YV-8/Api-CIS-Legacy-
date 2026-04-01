@@ -1,6 +1,6 @@
 # CIS API — Crowdsourced Ideation Solution
 
-API REST desarrollada en **ASP.NET Core 8** para la plataforma de ideación colaborativa CIS (Fase 2).
+API REST desarrollada en **ASP.NET Core 10** para la plataforma de ideación colaborativa CIS (Fase 2).
 
 ---
 
@@ -15,8 +15,8 @@ api-cis/
 
 ## Tecnologías
 
-- .NET 8 / ASP.NET Core Web API
-- Entity Framework Core 8 con Pomelo (MySQL)
+- .NET 10 / ASP.NET Core Web API
+- Entity Framework Core 9 con Pomelo (MySQL)
 - Swashbuckle (Swagger / OpenAPI 3)
 - Microsoft.Extensions.Diagnostics.HealthChecks
 
@@ -24,9 +24,8 @@ api-cis/
 
 ## Requisitos previos
 
-- .NET 8 SDK
-- MySQL 8.x en ejecución
-- `dotnet-ef` tool: `dotnet tool install --global dotnet-ef`
+- .NET 10 SDK
+- MySQL 8.x en ejecución 
 
 ---
 
@@ -54,7 +53,7 @@ ConnectionStrings__DefaultConnection=Server=...;Database=...;User=...;Password=.
 dotnet run --project CIS.Api
 ```
 
-La aplicación queda disponible en `http://localhost:5000` (o el puerto configurado en `launchSettings.json`).
+La aplicación queda disponible en `http://localhost:5000`  o `https://localhost:7225`
 
 ---
 

@@ -1,1 +1,85 @@
-﻿# Nuevo proyecto
+# CIS API — Crowdsourced Ideation Solution
+
+API REST desarrollada en **ASP.NET Core 8** para la plataforma de ideación colaborativa CIS (Fase 2).
+
+---
+
+## Estructura del proyecto
+
+```
+api-cis/
+├── CIS.Api/            # Capa de presentación (controllers, configuración)
+├── CIS.BusinessLogic/  # Capa de lógica de negocio
+└── CIS.DataAcces/      # Capa de acceso a datos (DbContext, entidades)
+```
+
+## Tecnologías
+
+- .NET 8 / ASP.NET Core Web API
+- Entity Framework Core 8 con Pomelo (MySQL)
+- Swashbuckle (Swagger / OpenAPI 3)
+- Microsoft.Extensions.Diagnostics.HealthChecks
+
+---
+
+## Requisitos previos
+
+- .NET 8 SDK
+- MySQL 8.x en ejecución
+- `dotnet-ef` tool: `dotnet tool install --global dotnet-ef`
+
+---
+
+## Configuración
+
+La cadena de conexión se configura en `CIS.Api/appsettings.Development.json` para desarrollo local:
+
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=localhost;Port=3307;Database=sd3;User=...;Password=...;"
+}
+```
+
+En producción se inyecta mediante la variable de entorno:
+
+```
+ConnectionStrings__DefaultConnection=Server=...;Database=...;User=...;Password=...;
+```
+
+---
+
+## Ejecutar la aplicación
+
+```bash
+dotnet run --project CIS.Api
+```
+
+La aplicación queda disponible en `http://localhost:5000` (o el puerto configurado en `launchSettings.json`).
+
+---
+
+## Endpoints base
+
+| Método | Ruta       | Descripción                              |
+|--------|------------|------------------------------------------|
+| GET    | /health    | Verifica el estado de la app y la BD     |
+| GET    | /swagger   | Documentación interactiva (solo en Dev)  |
+
+### Ejemplo de respuesta `/health`
+
+```json
+{ "status": "healthy" }
+```
+
+---
+
+## US-00 — Project Base Setup
+
+Cambios implementados en esta historia de usuario:
+
+- Corregida referencia rota en `CIS.BusinessLogic.csproj` (`CIS.AccesData` → `CIS.DataAcces`)
+- Agregados paquetes NuGet: `Pomelo.EntityFrameworkCore.MySql`, `Microsoft.EntityFrameworkCore.Design`, `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore`
+- Creado `CisDbContext` en `CIS.DataAcces/Data/`
+- Configurada la cadena de conexión vía `appsettings.json` y variable de entorno
+- Agregado endpoint `GET /health` con verificación de conectividad a MySQL
+- Eliminados archivos de muestra (`WeatherForecast`)

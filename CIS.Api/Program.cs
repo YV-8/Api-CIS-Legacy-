@@ -1,12 +1,11 @@
-using System.Text;
 using System.Text.Json;
 using CIS.DataAcces.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using CIS.BusinessLogic.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +38,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 builder.Services.AddAuthentication(options =>
 {
-    // Esto le dice que por defecto use JWT Bearer
+    // Defecto JWT Bearer
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
@@ -59,6 +58,8 @@ builder.Services.AddAuthentication(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<CisDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+
+builder.Services.AddScoped<ITopicService, TopicService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CisDbContext>();

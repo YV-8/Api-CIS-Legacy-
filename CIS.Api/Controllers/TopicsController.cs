@@ -4,16 +4,17 @@ using System.Security.Claims;
 using CIS.BusinessLogic.dtos;
 using CIS.DataAcces.Data;
 using CIS.DataAcces.Models;
+using CIS.BusinessLogic.Services;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
 public class TopicsController : ControllerBase
 {
-    private readonly CisDbContext _context;
+    private readonly ITopicService _topicService;
 
-    public TopicsController(CisDbContext context)
+    public TopicsController(ITopicService topicService)
     {
-        _context = context;
+        _topicService = topicService;
     }
 
     [HttpPost]
@@ -22,17 +23,16 @@ public class TopicsController : ControllerBase
     {
         var authorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
                       ?? User.FindFirst("sub")?.Value;
+        
+        if (authorId == null) return Unauthorized();
         var newTopic = new Topic
         {
             Title = request.Title,
             Description = request.Description,
             AuthorId = authorId!,
-            Status = TopicStatus.Draft
+            Status = TopicStatus.draft
         };
-
-        _context.Topics.Add(newTopic);
-        await _context.SaveChangesAsync();
-
+        newTopic = await _topicService.CreateTopicAsync(request, authorId!);
         // 3. Crear links HATEOAS
         var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}/{newTopic.Id}";
         
@@ -43,6 +43,7 @@ public class TopicsController : ControllerBase
             newTopic.Description,
             newTopic.AuthorId,
             newTopic.CreatedAt,
+            newTopic.Status,
             Links = new object[]
             {
                 new { rel = "self", href = baseUrl },

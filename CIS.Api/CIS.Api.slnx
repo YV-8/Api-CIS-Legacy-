@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="../CIS.BusinessLogic/CIS.BusinessLogic.csproj" />
+  <Project Path="../CIS.DataAcces/CIS.DataAcces.csproj" Id="1c6f576c-b63b-4e73-a88f-0e3fb425ac5d" />
+  <Project Path="CIS.Api.csproj" />
+</Solution>

@@ -17,6 +17,33 @@ public class TopicsController : ControllerBase
         _topicService = topicService;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetTopics(
+        [FromQuery] int page = 0,
+        [FromQuery] int size = 10,
+        [FromQuery] string? authorId = null,
+        [FromQuery] string? createdFrom = null,
+        [FromQuery] string? createdTo = null,
+        [FromQuery] string? sort = null)
+    {
+        DateTime? fromDate = null;
+        DateTime? toDate = null;
+
+        if (!string.IsNullOrEmpty(createdFrom) && DateTime.TryParse(createdFrom, out var f))
+        {
+            fromDate = f;
+        }
+
+        if (!string.IsNullOrEmpty(createdTo) && DateTime.TryParse(createdTo, out var t))
+        {
+            toDate = t;
+        }
+
+        var result = await _topicService.GetTopicsAsync(page, size, authorId, fromDate, toDate, sort);
+
+        return Ok(result);
+    }
+
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> Create([FromBody] CreateTopicRequest request)

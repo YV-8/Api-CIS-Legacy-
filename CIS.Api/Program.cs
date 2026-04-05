@@ -1,10 +1,13 @@
 using System.Text.Json;
+using System.Security.Claims;
 using CIS.DataAcces.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using CIS.BusinessLogic.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -77,6 +80,34 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Endpoint temporal para generar tokens JWT válidos (solo para desarrollo)
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/auth/debug-token", () =>
+    {
+        var key = new SymmetricSecurityKey(
+            System.Text.Encoding.UTF8.GetBytes("TuClaveSuperSecretaDeAlMenos32Chars!"));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim("sub", "user-123"),
+            new Claim("name", "Juan Pérez"),
+            new Claim(ClaimTypes.NameIdentifier, "user-123")
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: null,
+            audience: null,
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(365),
+            signingCredentials: creds
+        );
+
+        return new { token = new JwtSecurityTokenHandler().WriteToken(token) };
+    });
+}
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {

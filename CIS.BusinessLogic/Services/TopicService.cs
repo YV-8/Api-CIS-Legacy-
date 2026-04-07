@@ -15,7 +15,6 @@ public class TopicService : ITopicService
 
     public async Task<Topic> CreateTopicAsync(CreateTopicRequest request, string authorId)
     {
-
         if (string.IsNullOrEmpty(authorId))
             throw new ArgumentException("AuthorId is required", nameof(authorId));
 
@@ -24,9 +23,9 @@ public class TopicService : ITopicService
             Title = request.Title,
             Description = request.Description,
             AuthorId = authorId,
-            Type = TopicType.other, 
-            Status = TopicStatus.draft, 
-            VoteType = "single", 
+            Type = TopicType.other,
+            Status = TopicStatus.draft,
+            VoteType = "single",
         };
 
         _context.Topics.Add(topic);

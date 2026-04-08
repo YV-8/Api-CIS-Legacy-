@@ -5,30 +5,150 @@ namespace CIS.DataAcces.Data;
 
 public class CisDbContext : DbContext
 {
-    public CisDbContext(DbContextOptions<CisDbContext> options) : base(options) { }
+    public CisDbContext(DbContextOptions<CisDbContext> options) : base(options)
+    {
+    }
+
     public DbSet<Topic> Topics { get; set; }
+    public DbSet<Idea> Ideas { get; set; }
+    public DbSet<IdeaVote> IdeaVotes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Topic>(entity =>
         {
             entity.ToTable("topics");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Title).HasColumnName("name"); // Importante: name en SQL
-            entity.Property(e => e.AuthorId).HasColumnName("user_id");
-            entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>();
-            entity.Property(e => e.Type).HasColumnName("type").HasConversion<string>();
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id");
+
+            entity.Property(e => e.Title)
+                .HasColumnName("title")
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(e => e.Description)
+                .HasColumnName("description");
+
+            entity.Property(e => e.Type)
+                .HasColumnName("type")
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.Property(e => e.AuthorId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            entity.Property(e => e.VoteType)
+                .HasColumnName("vote_type")
+                .IsRequired();
+
+            entity.Property(e => e.AllowComments)
+                .HasColumnName("allow_comments")
+                .IsRequired();
+
+            entity.Property(e => e.AnonymousVote)
+                .HasColumnName("anonymous_vote")
+                .IsRequired();
+
             entity.Property(e => e.CreatedAt)
                 .HasColumnName("created_at")
-                .HasColumnType("datetime") // Forzamos el tipo exacto
+                .HasColumnType("datetime")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-            entity.Property(e => e.DeletedAt).HasColumnName("deleted_at").HasColumnType("datetime");
-    
-            // UpdateAt no explote
-            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("datetime");
-            //entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
-            //entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.DeletedAt)
+                .HasColumnName("deleted_at")
+                .HasColumnType("datetime");
         });
+
+        modelBuilder.Entity<Idea>(entity =>
+        {
+            entity.ToTable("ideas");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id");
+
+            entity.Property(e => e.Title)
+                .HasColumnName("title")
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(e => e.Description)
+                .HasColumnName("description")
+                .HasMaxLength(2000)
+                .IsRequired();
+
+            entity.Property(e => e.TopicId)
+                .HasColumnName("topic_id")
+                .IsRequired();
+
+            entity.Property(e => e.AuthorId)
+                .HasColumnName("author_id")
+                .IsRequired();
+
+            entity.Property(e => e.VoteCount)
+                .HasColumnName("vote_count")
+                .HasDefaultValue(0);
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("datetime")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasColumnType("datetime");
+
+            entity.HasOne(e => e.Topic)
+                .WithMany(t => t.Ideas)
+                .HasForeignKey(e => e.TopicId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<IdeaVote>(entity =>
+        {
+            entity.ToTable("idea_votes");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id");
+
+            entity.Property(e => e.IdeaId)
+                .HasColumnName("idea_id")
+                .IsRequired();
+
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("datetime")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(e => e.Idea)
+                .WithMany(i => i.Votes)
+                .HasForeignKey(e => e.IdeaId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.IdeaId, e.UserId })
+                .IsUnique();
+        });
+
+        base.OnModelCreating(modelBuilder);
     }
 }

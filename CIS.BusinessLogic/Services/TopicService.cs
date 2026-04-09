@@ -73,6 +73,11 @@ public class TopicService : ITopicService
         }
 
         // Pagination
+        if (size <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than zero.");
+        }
+
         var totalElements = await query.CountAsync();
         var totalPages = (int)Math.Ceiling((double)totalElements / size);
 
@@ -95,33 +100,55 @@ public class TopicService : ITopicService
             }
         });
 
-        // HATEOAS links
-        var baseUrl = "/api/v1/topics";
-        var links = new List<object>
-        {
-            new { rel = "self", href = $"{baseUrl}?page={page}&size={size}" }
-        };
-
-        if (page > 0)
-        {
-            links.Add(new { rel = "first", href = $"{baseUrl}?page=0&size={size}" });
-            links.Add(new { rel = "prev", href = $"{baseUrl}?page={page - 1}&size={size}" });
-        }
-
-        if (page < totalPages - 1)
-        {
-            links.Add(new { rel = "next", href = $"{baseUrl}?page={page + 1}&size={size}" });
-            links.Add(new { rel = "last", href = $"{baseUrl}?page={totalPages - 1}&size={size}" });
-        }
-
         return new PaginatedResponse<TopicResponse>
         {
             Content = content,
             Page = page,
             Size = size,
             TotalElements = totalElements,
-            TotalPages = totalPages,
-            Links = links.ToArray()
+            TotalPages = totalPages
         };
+    }
+
+    public async Task<Topic?> GetTopicByIdAsync(string id)
+    {
+        return await _context.Topics.FindAsync(id);
+    }
+
+    public async Task<Topic> UpdateTopicAsync(string id, UpdateTopicRequest request, string requesterId)
+    {
+        if (string.IsNullOrEmpty(requesterId))
+            throw new ArgumentException("RequesterId is required", nameof(requesterId));
+
+        var topic = await _context.Topics.FindAsync(id);
+        if (topic == null)
+            throw new KeyNotFoundException("Topic not found");
+
+        if (topic.AuthorId != requesterId)
+            throw new UnauthorizedAccessException("Not allowed to update this topic");
+
+        topic.Title = request.Title;
+        topic.Description = request.Description;
+        topic.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return topic;
+    }
+
+    public async Task DeleteTopicAsync(string id, string requesterId)
+    {
+        if (string.IsNullOrEmpty(requesterId))
+            throw new ArgumentException("RequesterId is required", nameof(requesterId));
+
+        var topic = await _context.Topics.FindAsync(id);
+        if (topic == null)
+            throw new KeyNotFoundException("Topic not found");
+
+        if (topic.AuthorId != requesterId)
+            throw new UnauthorizedAccessException("Not allowed to delete this topic");
+
+        _context.Topics.Remove(topic);
+        await _context.SaveChangesAsync();
     }
 }

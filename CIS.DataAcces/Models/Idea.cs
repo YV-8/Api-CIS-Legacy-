@@ -36,5 +36,6 @@ public class Idea
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    public ICollection<IdeaVote> Votes { get; set; } = new List<IdeaVote>();
+    public ICollection<Vote> Votes { get; set; } = new List<Vote>();
+    public ICollection<Comment> Comments { get; set; } = new List<Comment>();
 }

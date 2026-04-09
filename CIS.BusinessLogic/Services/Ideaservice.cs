@@ -78,8 +78,7 @@ public class IdeaService : IIdeaService
             Page = page,
             Size = size,
             TotalElements = totalElements,
-            TotalPages = totalPages,
-            Links = BuildCollectionLinks(topicId, page, size, totalPages)
+            TotalPages = totalPages
         };
     }
 
@@ -137,7 +136,7 @@ public class IdeaService : IIdeaService
 
     if (idea.Votes.Any())
     {
-        _context.IdeaVotes.RemoveRange(idea.Votes);
+        _context.Votes.RemoveRange(idea.Votes);
     }
 
     _context.Ideas.Remove(idea);

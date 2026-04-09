@@ -8,7 +8,7 @@ public enum TopicStatus
     draft,
     active,
     inactive,
-    archived
+    archive
 }
 
 public enum TopicType

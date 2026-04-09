@@ -11,7 +11,8 @@ public class CisDbContext : DbContext
 
     public DbSet<Topic> Topics { get; set; }
     public DbSet<Idea> Ideas { get; set; }
-    public DbSet<IdeaVote> IdeaVotes { get; set; }
+    public DbSet<Vote> Votes { get; set; }
+    public DbSet<Comment> Comments { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -25,7 +26,7 @@ public class CisDbContext : DbContext
                 .HasColumnName("id");
 
             entity.Property(e => e.Title)
-                .HasColumnName("title")
+                .HasColumnName("name")
                 .HasMaxLength(200)
                 .IsRequired();
 
@@ -118,9 +119,9 @@ public class CisDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<IdeaVote>(entity =>
+        modelBuilder.Entity<Vote>(entity =>
         {
-            entity.ToTable("idea_votes");
+            entity.ToTable("votes");
 
             entity.HasKey(e => e.Id);
 
@@ -132,8 +133,7 @@ public class CisDbContext : DbContext
                 .IsRequired();
 
             entity.Property(e => e.UserId)
-                .HasColumnName("user_id")
-                .IsRequired();
+                .HasColumnName("user_id");
 
             entity.Property(e => e.CreatedAt)
                 .HasColumnName("created_at")
@@ -147,6 +147,48 @@ public class CisDbContext : DbContext
 
             entity.HasIndex(e => new { e.IdeaId, e.UserId })
                 .IsUnique();
+        });
+
+        modelBuilder.Entity<Comment>(entity =>
+        {
+            entity.ToTable("comments");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id");
+
+            entity.Property(e => e.Content)
+                .IsRequired()
+                .HasColumnType("text")
+                .HasColumnName("content");
+
+            entity.Property(e => e.IdeaId)
+                .IsRequired()
+                .HasColumnType("varchar(255)")
+                .HasColumnName("idea_id");
+
+            entity.Property(e => e.UserId)
+                .IsRequired()
+                .HasColumnType("varchar(255)")
+                .HasColumnName("user_id");
+
+            entity.Property(e => e.CreatedAt)
+                .ValueGeneratedOnAdd()
+                .HasColumnType("datetime")
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(e => e.Idea)
+                .WithMany(i => i.Comments)
+                .HasForeignKey(e => e.IdeaId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.ToTable("comments", (string)null);
         });
 
         base.OnModelCreating(modelBuilder);

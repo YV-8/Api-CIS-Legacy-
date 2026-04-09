@@ -7,5 +7,4 @@ public record PaginatedResponse<T>
     public int Size { get; init; }
     public long TotalElements { get; init; }
     public int TotalPages { get; init; }
-    public object[] Links { get; init; } = Array.Empty<object>();
 }

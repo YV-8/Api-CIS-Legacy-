@@ -22,7 +22,11 @@ namespace CIS.Api.Controllers
         public async Task<IActionResult> GetTopics([FromQuery] TopicFilterRequest filter)
         {
             const int maxSize = 50;
-            if (filter.Size > maxSize) filter.Size = maxSize;
+            
+            if (filter.Size < 1 || filter.Size > maxSize)
+            {
+                return BadRequest(new { message = $"Size must be between 1 and {maxSize}." });
+            }
 
             DateTime? fromDate = null;
             DateTime? toDate = null;
@@ -44,7 +48,7 @@ namespace CIS.Api.Controllers
             PaginatedResponse<TopicResponse> result;
             try
             {
-                // Pasamos los parámetros de "develop" pero con la validación de la US-07
+                
                 result = await _topicService.GetTopicsAsync(
                     filter.Page, 
                     filter.Size, 

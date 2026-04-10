@@ -52,7 +52,8 @@ public class TopicService : ITopicService
 
         if (createdTo.HasValue)
         {
-            query = query.Where(t => t.CreatedAt <= createdTo.Value);
+            var endOfDay = createdTo.Value.Date.AddDays(1).AddTicks(-1);
+            query = query.Where(t => t.CreatedAt <= endOfDay);
         }
 
         // Sorting

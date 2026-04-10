@@ -3,6 +3,7 @@ using CIS.BusinessLogic.Exceptions;
 using CIS.DataAcces.Data;
 using CIS.DataAcces.Models;
 using Microsoft.EntityFrameworkCore;
+using CIS.BusinessLogic.Helpers;
 
 namespace CIS.BusinessLogic.Services;
 
@@ -45,7 +46,7 @@ public class IdeaService : IIdeaService
         int page,
         int size,
         string? authorId,
-        string? sort)
+        string[]? sort)
     {
         var topicExists = await _context.Topics
             .AnyAsync(t => t.Id == topicId && t.DeletedAt == null);
@@ -114,56 +115,53 @@ public class IdeaService : IIdeaService
         return MapIdeaResponse(idea);
     }
 
-   public async Task DeleteIdeaAsync(string topicId, string ideaId, string currentUserId)
-{
-    var idea = await _context.Ideas
-        .Include(i => i.Votes)
-        .FirstOrDefaultAsync(i => i.Id == ideaId && i.TopicId == topicId);
-
-    if (idea == null)
+    public async Task DeleteIdeaAsync(string topicId, string ideaId, string currentUserId)
     {
-        var topicExists = await _context.Topics
-            .AnyAsync(t => t.Id == topicId && t.DeletedAt == null);
+        var idea = await _context.Ideas
+            .Include(i => i.Votes)
+            .FirstOrDefaultAsync(i => i.Id == ideaId && i.TopicId == topicId);
 
-        if (!topicExists)
-            throw new NotFoundException("Topic not found");
-
-        throw new NotFoundException("Idea not found");
-    }
-
-    if (idea.AuthorId != currentUserId)
-        throw new ForbiddenException("You are not allowed to delete this idea");
-
-    if (idea.Votes.Any())
-    {
-        _context.Votes.RemoveRange(idea.Votes);
-    }
-
-    _context.Ideas.Remove(idea);
-
-    var affectedRows = await _context.SaveChangesAsync();
-
-    if (affectedRows == 0)
-        throw new Exception("Idea was not deleted");
-}
-
-    private static IQueryable<Idea> ApplySorting(IQueryable<Idea> query, string? sort)
-    {
-        if (string.IsNullOrWhiteSpace(sort))
-            return query.OrderByDescending(i => i.VoteCount).ThenByDescending(i => i.CreatedAt);
-
-        var parts = sort.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var sortBy = parts.ElementAtOrDefault(0)?.ToLowerInvariant() ?? "votecount";
-        var direction = parts.ElementAtOrDefault(1)?.ToLowerInvariant() ?? "desc";
-
-        return (sortBy, direction) switch
+        if (idea == null)
         {
-            ("votecount", "asc") => query.OrderBy(i => i.VoteCount).ThenByDescending(i => i.CreatedAt),
-            ("votecount", "desc") => query.OrderByDescending(i => i.VoteCount).ThenByDescending(i => i.CreatedAt),
-            ("createdat", "asc") => query.OrderBy(i => i.CreatedAt),
-            ("createdat", "desc") => query.OrderByDescending(i => i.CreatedAt),
-            _ => query.OrderByDescending(i => i.VoteCount).ThenByDescending(i => i.CreatedAt)
+            var topicExists = await _context.Topics
+                .AnyAsync(t => t.Id == topicId && t.DeletedAt == null);
+
+            if (!topicExists)
+                throw new NotFoundException("Topic not found");
+
+            throw new NotFoundException("Idea not found");
+        }
+
+        if (idea.AuthorId != currentUserId)
+            throw new ForbiddenException("You are not allowed to delete this idea");
+
+        if (idea.Votes.Any())
+        {
+            _context.Votes.RemoveRange(idea.Votes);
+        }
+
+        _context.Ideas.Remove(idea);
+
+        var affectedRows = await _context.SaveChangesAsync();
+
+        if (affectedRows == 0)
+            throw new Exception("Idea was not deleted");
+    }
+
+    private static IQueryable<Idea> ApplySorting(IQueryable<Idea> query, string[]? sort)
+    {
+        var whitelist = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "voteCount", "VoteCount" },
+            { "createdAt", "CreatedAt" }
         };
+
+        if (sort == null || sort.Length == 0)
+        {
+            return query.OrderByDescending(i => i.VoteCount).ThenByDescending(i => i.CreatedAt);
+        }
+
+        return query.ApplySorting(sort, whitelist);
     }
 
     private static IdeaResponse MapIdeaResponse(Idea idea)

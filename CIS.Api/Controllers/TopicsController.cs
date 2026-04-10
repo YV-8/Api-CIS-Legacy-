@@ -23,7 +23,7 @@ public class TopicsController : ControllerBase
         [FromQuery] string? authorId = null,
         [FromQuery] string? createdFrom = null,
         [FromQuery] string? createdTo = null,
-        [FromQuery] string? sort = null)
+        [FromQuery] string[]? sort = null)
     {
         const int maxSize = 50;
 
@@ -50,7 +50,15 @@ public class TopicsController : ControllerBase
             toDate = t;
         }
 
-        var result = await _topicService.GetTopicsAsync(page, size, authorId, fromDate, toDate, sort);
+        PaginatedResponse<TopicResponse> result;
+        try
+        {
+            result = await _topicService.GetTopicsAsync(page, size, authorId, fromDate, toDate, sort);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
         var links = new List<string>();

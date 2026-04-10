@@ -46,7 +46,7 @@ public class IdeasController : ControllerBase
         [FromQuery] int page = 0,
         [FromQuery] int size = 10,
         [FromQuery] string? authorId = null,
-        [FromQuery] string? sort = "voteCount,desc")
+        [FromQuery] string[]? sort = null)
     {
         try
         {
@@ -62,7 +62,15 @@ public class IdeasController : ControllerBase
                 return BadRequest(new { message = $"Size must be between 1 and {maxSize}." });
             }
 
-            var result = await _ideaService.GetIdeasAsync(topicId, page, size, authorId, sort);
+            PaginatedResponse<IdeaResponse> result;
+            try
+            {
+                result = await _ideaService.GetIdeasAsync(topicId, page, size, authorId, sort);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
 
             var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
             var links = new List<string>();
@@ -93,62 +101,62 @@ public class IdeasController : ControllerBase
     }
 
     [HttpPut("{ideaId}")]
-[Authorize]
-public async Task<IActionResult> UpdateIdea(string topicId, string ideaId, [FromBody] UpdateIdeaRequest request)
-{
-    try
+    [Authorize]
+    public async Task<IActionResult> UpdateIdea(string topicId, string ideaId, [FromBody] UpdateIdeaRequest request)
     {
-        var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                            ?? User.FindFirst("sub")?.Value;
-
-        if (string.IsNullOrWhiteSpace(currentUserId))
-            return Unauthorized();
-
-        var updatedIdea = await _ideaService.UpdateIdeaAsync(topicId, ideaId, request, currentUserId);
-        return Ok(new
+        try
         {
-            currentUserId,
-            data = updatedIdea
-        });
+            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                ?? User.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrWhiteSpace(currentUserId))
+                return Unauthorized();
+
+            var updatedIdea = await _ideaService.UpdateIdeaAsync(topicId, ideaId, request, currentUserId);
+            return Ok(new
+            {
+                currentUserId,
+                data = updatedIdea
+            });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (ForbiddenException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
     }
-    catch (NotFoundException ex)
-    {
-        return NotFound(new { message = ex.Message });
-    }
-    catch (ForbiddenException ex)
-    {
-        return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-    }
-}
     
 
     [HttpDelete("{ideaId}")]
-[Authorize]
-public async Task<IActionResult> DeleteIdea(string topicId, string ideaId)
-{
-    try
+    [Authorize]
+    public async Task<IActionResult> DeleteIdea(string topicId, string ideaId)
     {
-        var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                            ?? User.FindFirst("sub")?.Value;
-
-        if (string.IsNullOrWhiteSpace(currentUserId))
-            return Unauthorized();
-
-        await _ideaService.DeleteIdeaAsync(topicId, ideaId, currentUserId);
-
-        return Ok(new
+        try
         {
-            message = "Idea deleted",
-            currentUserId
-        });
+            var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                ?? User.FindFirst("sub")?.Value;
+
+            if (string.IsNullOrWhiteSpace(currentUserId))
+                return Unauthorized();
+
+            await _ideaService.DeleteIdeaAsync(topicId, ideaId, currentUserId);
+
+            return Ok(new
+            {
+                message = "Idea deleted",
+                currentUserId
+            });
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (ForbiddenException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+        }
     }
-    catch (NotFoundException ex)
-    {
-        return NotFound(new { message = ex.Message });
-    }
-    catch (ForbiddenException ex)
-    {
-        return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
-    }
-}
 }

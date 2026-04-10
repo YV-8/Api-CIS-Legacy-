@@ -46,18 +46,22 @@ test:
 
 coverage_check:
   stage: coverage
-  image: mcr.microsoft.com/dotnet/sdk:8.0
+  image: mcr.microsoft.com/dotnet/sdk:10.0
   dependencies:
     - test
   script:
     - |
-      COVERAGE=$(grep -oP 'Total.*?(\d+)%' ./coverage/**/coverage.cobertura.xml | grep -oP '\d+' | tail -1)
-      echo "Test coverage: ${COVERAGE}%"
+      XML_FILE=$(find ./coverage -name "coverage.cobertura.xml" | head -1)
+      echo "Archivo encontrado: $XML_FILE"
+      LINE_RATE=$(grep -oP 'line-rate="\K[0-9.]+' "$XML_FILE" | head -1)
+      echo "Line rate: $LINE_RATE"
+      COVERAGE=$(echo "$LINE_RATE * 100" | bc | cut -d'.' -f1)
+      echo "Cobertura: ${COVERAGE}%"
       if [ "$COVERAGE" -lt 80 ]; then
-        echo "Coverage is below 80%: ${COVERAGE}%"
+        echo "Cobertura por debajo del 80%: ${COVERAGE}%"
         exit 1
       else
-        echo "Coverage is acceptable: ${COVERAGE}%"
+        echo "Cobertura aceptable: ${COVERAGE}%"
       fi
   only:
     - main

@@ -7,5 +7,5 @@ public record TopicFilterRequest
     public string? AuthorId { get; init; }
     public string? CreatedFrom { get; init; }
     public string? CreatedTo { get; init; }
-    public string? Sort { get; init; }
+    public string[]? Sort { get; set; }
 }

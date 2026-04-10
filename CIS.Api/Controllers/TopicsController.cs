@@ -17,22 +17,17 @@ public class TopicsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetTopics(
-        [FromQuery] int page = 0,
-        [FromQuery] int size = 10,
-        [FromQuery] string? authorId = null,
-        [FromQuery] string? createdFrom = null,
-        [FromQuery] string? createdTo = null,
-        [FromQuery] string? sort = null)
+    public async Task<IActionResult> GetTopics( [FromQuery]
+        TopicFilterRequest filter)
     {
         const int maxSize = 50;
 
-        if (page < 0)
+        if (filter.Page < 0)
         {
             return BadRequest(new { message = "Page must be greater than or equal to 0." });
         }
 
-        if (size <= 0 || size > maxSize)
+        if (filter.Size <= 0 || filter.Size > maxSize)
         {
             return BadRequest(new { message = $"Size must be between 1 and {maxSize}." });
         }
@@ -40,31 +35,51 @@ public class TopicsController : ControllerBase
         DateTime? fromDate = null;
         DateTime? toDate = null;
 
-        if (!string.IsNullOrEmpty(createdFrom) && DateTime.TryParse(createdFrom, out var f))
+        if (!string.IsNullOrEmpty(filter.CreatedFrom) && DateTime.TryParse(filter.CreatedFrom, out var f))
         {
             fromDate = f;
         }
 
-        if (!string.IsNullOrEmpty(createdTo) && DateTime.TryParse(createdTo, out var t))
+        if (!string.IsNullOrEmpty(filter.CreatedTo) && DateTime.TryParse(filter.CreatedTo, out var t))
         {
             toDate = t;
         }
 
-        var result = await _topicService.GetTopicsAsync(page, size, authorId, fromDate, toDate, sort);
+        if (!string.IsNullOrEmpty(filter.CreatedFrom))
+        {
+            if (!DateTime.TryParse(filter.CreatedFrom, out var d))
+                return BadRequest(new { message = "Invalid createdFrom date format. Use YYYY-MM-DD." });
+            fromDate = d;
+        }
+
+        if (!string.IsNullOrEmpty(filter.CreatedTo))
+        {
+            if (!DateTime.TryParse(filter.CreatedTo, out var dt))
+                return BadRequest(new { message = "Invalid createdTo date format. Use YYYY-MM-DD." });
+            toDate = dt;
+        }
+
+        var result = await _topicService.GetTopicsAsync(
+        filter.Page, 
+        filter.Size, 
+        filter.AuthorId, 
+        fromDate, 
+        toDate, 
+        filter.Sort);
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
         var links = new List<string>();
 
-        if (page > 0)
+        if (filter.Page > 0)
         {
-            links.Add($"<{baseUrl}?page=0&size={size}>; rel=\"first\"");
-            links.Add($"<{baseUrl}?page={page - 1}&size={size}>; rel=\"prev\"");
+            links.Add($"<{baseUrl}?page=0&size={filter.Size}>; rel=\"first\"");
+            links.Add($"<{baseUrl}?page={filter.Page - 1}&size={filter.Size}>; rel=\"prev\"");
         }
 
-        if (page < result.TotalPages - 1)
+        if (filter.Page < result.TotalPages - 1)
         {
-            links.Add($"<{baseUrl}?page={page + 1}&size={size}>; rel=\"next\"");
-            links.Add($"<{baseUrl}?page={result.TotalPages - 1}&size={size}>; rel=\"last\"");
+            links.Add($"<{baseUrl}?page={filter.Page + 1}&size={filter.Size}>; rel=\"next\"");
+            links.Add($"<{baseUrl}?page={result.TotalPages - 1}&size={filter.Size}>; rel=\"last\"");
         }
 
         if (links.Any())

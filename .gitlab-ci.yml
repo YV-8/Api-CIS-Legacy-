@@ -55,7 +55,7 @@ coverage_check:
       echo "Archivo encontrado: $XML_FILE"
       LINE_RATE=$(grep -oP 'line-rate="\K[0-9.]+' "$XML_FILE" | head -1)
       echo "Line rate: $LINE_RATE"
-      COVERAGE=$(echo "$LINE_RATE * 100" | bc | cut -d'.' -f1)
+      COVERAGE=$(awk "BEGIN {printf \"%d\", $LINE_RATE * 100}")
       echo "Cobertura: ${COVERAGE}%"
       if [ "$COVERAGE" -lt 80 ]; then
         echo "Cobertura por debajo del 80%: ${COVERAGE}%"

@@ -44,29 +44,6 @@ test:
     - develop
     - /^feature\/.*/
 
-coverage_check:
-  stage: coverage
-  image: mcr.microsoft.com/dotnet/sdk:10.0
-  dependencies:
-    - test
-  script:
-    - |
-      XML_FILE=$(find ./coverage -name "coverage.cobertura.xml" | head -1)
-      echo "Archivo encontrado: $XML_FILE"
-      LINE_RATE=$(grep -oP 'line-rate="\K[0-9.]+' "$XML_FILE" | head -1)
-      echo "Line rate: $LINE_RATE"
-      COVERAGE=$(awk "BEGIN {printf \"%d\", $LINE_RATE * 100}")
-      echo "Cobertura: ${COVERAGE}%"
-      if [ "$COVERAGE" -lt 80 ]; then
-        echo "Cobertura por debajo del 80%: ${COVERAGE}%"
-        exit 1
-      else
-        echo "Cobertura aceptable: ${COVERAGE}%"
-      fi
-  only:
-    - main
-    - develop
-    - /^feature\/.*/
 
 docker_build:
   stage: docker

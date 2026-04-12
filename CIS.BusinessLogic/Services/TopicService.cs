@@ -2,6 +2,7 @@ using CIS.BusinessLogic.dtos;
 using CIS.DataAcces.Models;
 using CIS.DataAcces.Data;
 using Microsoft.EntityFrameworkCore;
+using CIS.BusinessLogic.Helpers;
 
 namespace CIS.BusinessLogic.Services;
 public class TopicService : ITopicService
@@ -34,7 +35,7 @@ public class TopicService : ITopicService
         return topic;
     }
 
-    public async Task<PaginatedResponse<TopicResponse>> GetTopicsAsync(int page, int size, string? authorId, DateTime? createdFrom, DateTime? createdTo, string? sort)
+    public async Task<PaginatedResponse<TopicResponse>> GetTopicsAsync(int page, int size, string? authorId, DateTime? createdFrom, DateTime? createdTo, string[]? sort)
     {
         var query = _context.Topics.AsQueryable();
 
@@ -56,21 +57,18 @@ public class TopicService : ITopicService
         }
 
         // Sorting
-        if (!string.IsNullOrEmpty(sort))
+        var whitelist = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            var sortParts = sort.Split(',');
-            var sortBy = sortParts[0];
-            var sortOrder = sortParts.Length > 1 ? sortParts[1] : "asc";
+            { "createdAt", "CreatedAt" }
+        };
 
-            query = sortBy.ToLower() switch
-            {
-                "createdat" => sortOrder.ToLower() == "desc" ? query.OrderByDescending(t => t.CreatedAt) : query.OrderBy(t => t.CreatedAt),
-                _ => query.OrderBy(t => t.CreatedAt) // default
-            };
+        if (sort != null && sort.Length > 0)
+        {
+            query = query.ApplySorting(sort, whitelist);
         }
         else
         {
-            query = query.OrderBy(t => t.CreatedAt);
+            query = query.OrderByDescending(t => t.CreatedAt);
         }
 
         // Pagination

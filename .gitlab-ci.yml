@@ -1,0 +1,87 @@
+stages:
+  - build
+  - test
+  - coverage
+  - docker
+
+variables:
+  DOCKER_DRIVER: overlay2
+
+build:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  script:
+    - dotnet restore CIS.Api/CIS.Api.csproj
+    - dotnet build CIS.Api/CIS.Api.csproj --configuration Release --no-restore
+  artifacts:
+    paths:
+      - CIS.Api/bin/
+      - CIS.Api/obj/
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+    - /^feature\/.*/
+
+test:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  dependencies:
+    - build
+  script:
+    - dotnet test CIS.BusinessLogic.Tests/CIS.BusinessLogic.Tests.csproj --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+  coverage: '/Total.*?\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: ./coverage/**/coverage.cobertura.xml
+    paths:
+      - ./coverage/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+    - /^feature\/.*/
+
+coverage_check:
+  stage: coverage
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  dependencies:
+    - test
+  script:
+    - |
+      XML_FILE=$(find ./coverage -name "coverage.cobertura.xml" | head -1)
+      echo "Archivo encontrado: $XML_FILE"
+      LINE_RATE=$(grep -oP 'line-rate="\K[0-9.]+' "$XML_FILE" | head -1)
+      echo "Line rate: $LINE_RATE"
+      COVERAGE=$(awk "BEGIN {printf \"%d\", $LINE_RATE * 100}")
+      echo "Cobertura: ${COVERAGE}%"
+      if [ "$COVERAGE" -lt 19 ]; then
+        echo "Cobertura por debajo del 19%: ${COVERAGE}%"
+        exit 1
+      else
+        echo "Cobertura aceptable: ${COVERAGE}%"
+      fi
+  only:
+    - main
+    - develop
+    - /^feature\/.*/
+
+docker_build:
+  stage: docker
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG -f CIS.Api/Dockerfile .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+    - |
+      if [ "$CI_COMMIT_REF_NAME" = "main" ]; then
+        docker tag $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG $CI_REGISTRY_IMAGE:latest
+        docker push $CI_REGISTRY_IMAGE:latest
+      fi
+  only:
+    - main
+    - develop

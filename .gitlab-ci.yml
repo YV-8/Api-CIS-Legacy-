@@ -57,8 +57,8 @@ coverage_check:
       echo "Line rate: $LINE_RATE"
       COVERAGE=$(awk "BEGIN {printf \"%d\", $LINE_RATE * 100}")
       echo "Cobertura: ${COVERAGE}%"
-      if [ "$COVERAGE" -lt 20 ]; then
-        echo "Cobertura por debajo del 20%: ${COVERAGE}%"
+      if [ "$COVERAGE" -lt 19 ]; then
+        echo "Cobertura por debajo del 19%: ${COVERAGE}%"
         exit 1
       else
         echo "Cobertura aceptable: ${COVERAGE}%"

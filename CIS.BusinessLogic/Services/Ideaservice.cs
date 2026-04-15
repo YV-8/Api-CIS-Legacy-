@@ -207,4 +207,69 @@ public class IdeaService : IIdeaService
 
         return links.ToArray();
     }
+
+    public async Task<IEnumerable<TopIdeaResponse>> GetTopIdeasAsync(string? topicId = null, int limit = 200)
+    {
+        //IQueryable<Idea> query = _context.Ideas;
+        var query = _context.Ideas
+            .AsNoTracking()
+            .Where(i => i.VoteCount > 0);
+
+        if (!string.IsNullOrWhiteSpace(topicId))
+        {
+            var topicExists = await _context.Topics
+                .AnyAsync(t => t.Id == topicId && t.DeletedAt == null);
+
+            if (!topicExists)
+                throw new NotFoundException("Topic not found");
+            query = query.Where(i => i.TopicId == topicId);
+        }
+
+        return await query
+            .OrderByDescending(i => i.VoteCount)
+            .ThenByDescending(i => i.CreatedAt)
+            .Take(limit)
+            .Select(i => new TopIdeaResponse(
+                i.Id,
+                i.Title,
+                i.TopicId,
+                i.AuthorId,
+                i.VoteCount
+            ))
+            .ToListAsync();
+    }
+    public async Task<IEnumerable<TopUserResponse>> GetTopUsersAsync(int limit = 10)
+    {
+        var ideasCount = await _context.Ideas
+        .GroupBy(i => i.AuthorId)
+        .Select(g => new { UserId = g.Key, Count = g.Count() })
+        .ToListAsync();
+        var votesCount = await _context.Votes
+        .Where(v => v.UserId != null)
+        .GroupBy(v => v.UserId)
+        .Select(g => new { UserId = g.Key!, Count = g.Count() })
+        .ToListAsync();
+
+        var activityMap = new Dictionary<string, int> ();
+        foreach (var idea in ideasCount)        
+        {
+            activityMap[idea.UserId] = idea.Count;
+        }
+        foreach (var vote in votesCount)
+        {
+            if (activityMap.ContainsKey(vote.UserId))
+            {
+                activityMap[vote.UserId] += vote.Count;
+            }
+            else
+            {
+                activityMap[vote.UserId] = vote.Count;
+            }
+        }
+        return activityMap
+                .OrderByDescending(kv => kv.Value)
+                .Take(limit)
+                .Select(kv => new TopUserResponse(kv.Key, kv.Value))
+                .ToList();
+    }
 }

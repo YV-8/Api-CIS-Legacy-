@@ -15,12 +15,20 @@ public class StatsController : ControllerBase
     [HttpGet("ideas/top")]
     public async Task<IActionResult> GetTopIdeas([FromQuery] string? topicId, [FromQuery] int limit = 200)
     {
+        if (limit <= 0)
+        {
+            return BadRequest(new { message = "Limit must be greater than 0." });
+        }
         var topIdeas = await _ideaService.GetTopIdeasAsync(topicId, limit);
         return Ok(topIdeas);
     }
     [HttpGet("topics/{topicId}/ideas/top")]
     public async Task<IActionResult> GetTopIdeasByTopic([FromRoute] string topicId, [FromQuery] int limit = 200)
     {
+        if (limit <= 0)
+        {
+            return BadRequest(new { message = "Limit must be greater than 0." });
+        }
         try 
         {
             var result = await _ideaService.GetTopIdeasAsync(topicId, limit: 200);
@@ -35,6 +43,10 @@ public class StatsController : ControllerBase
     [HttpGet("users/top")]
     public async Task<IActionResult> GetTopUsers([FromQuery] int limit = 200)
     {
+        if (limit <= 0)
+        {
+            return BadRequest(new { message = "Limit must be greater than 0." });
+        }
         var topUsers = await _ideaService.GetTopUsersAsync(limit);
         return Ok(topUsers);
     }

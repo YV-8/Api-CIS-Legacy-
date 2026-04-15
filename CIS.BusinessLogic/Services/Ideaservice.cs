@@ -210,6 +210,7 @@ public class IdeaService : IIdeaService
 
     public async Task<IEnumerable<TopIdeaResponse>> GetTopIdeasAsync(string? topicId = null, int limit = 200)
     {
+        if (limit <= 0) return Enumerable.Empty<TopIdeaResponse>();
         //IQueryable<Idea> query = _context.Ideas;
         var query = _context.Ideas
             .AsNoTracking()

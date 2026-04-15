@@ -33,7 +33,7 @@ public class StatsController : ControllerBase
         {
             return BadRequest(new { message = "Limit must be greater than 0." });
         }
-        var reslut = await _statsService.GetTopIdeasAsync(topicId, limit);
+        var result = await _statsService.GetTopIdeasAsync(topicId, limit);
         return Ok(result);
     }
 
@@ -63,7 +63,7 @@ public class StatsController : ControllerBase
         {
             return BadRequest(new { message = "Limit must be greater than 0." });
         }
-        var topUsers = await _statsService.GetTopUsersAsync(limit);
-        return Ok(topUsers);
+        var result = await _statsService.GetTopUsersAsync(limit);
+        return Ok(result);
     }
 }

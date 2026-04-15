@@ -49,7 +49,7 @@ public class TopicServiceTests
 
         var service = new TopicService(context);
 
-        var result = await service.GetTopicsAsync(page: 0, size: 2, authorId: "author1", createdFrom: new DateTime(2025, 1, 1), createdTo: new DateTime(2025, 12, 31), sort: "createdAt,desc");
+        var result = await service.GetTopicsAsync(page: 0, size: 2, authorId: "author1", createdFrom: new DateTime(2025, 1, 1), createdTo: new DateTime(2025, 12, 31), sort: new[] { "createdAt,desc" });
 
         Assert.Equal(2, result.Content.Count());
         Assert.Equal(2, result.TotalElements);

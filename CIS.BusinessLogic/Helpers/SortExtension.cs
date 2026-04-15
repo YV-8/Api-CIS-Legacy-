@@ -24,7 +24,7 @@ namespace CIS.BusinessLogic.Helpers
                 var direction = parts.Length > 1 ? parts[1].Trim().ToLower() : "asc";
 
                
-                if (!whitelist.TryGetValue(fieldName, out string propertyName))
+                if (!whitelist.TryGetValue(fieldName, out var propertyName) || string.IsNullOrWhiteSpace(propertyName))
                 {
                     
                     throw new ArgumentException($"Unsupported sorting field: '{fieldName}'");

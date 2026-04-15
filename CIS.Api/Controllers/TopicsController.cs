@@ -115,7 +115,7 @@ namespace CIS.Api.Controllers
                 }
             };
 
-            return CreatedAtAction(nameof(Create), new { id = newTopic.Id }, response);
+            return CreatedAtAction(nameof(GetById), new { id = newTopic.Id }, response);
         }
 
         [HttpGet("{id}")]

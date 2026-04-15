@@ -68,6 +68,7 @@ builder.Services.AddDbContext<CisDbContext>(options =>
 builder.Services.AddScoped<ITopicService, TopicService>();
 builder.Services.AddScoped<IIdeaService, IdeaService>();
 builder.Services.AddScoped<IVoteService, VoteService>();
+builder.Services.AddScoped<IStatsService, StatsService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<CisDbContext>();

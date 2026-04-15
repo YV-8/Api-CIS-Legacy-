@@ -47,7 +47,7 @@ public class StatsController : ControllerBase
         }
         try 
         {
-            var result = await _statsService.GetTopIdeasAsync(topicId, limit: 200);
+            var result = await _statsService.GetTopIdeasAsync(topicId, limit);
             return Ok(result); 
         }
         catch (NotFoundException ex)

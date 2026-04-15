@@ -179,7 +179,7 @@ public class IdeaService : IIdeaService
             {
                 new { rel = "self", href = $"/api/v1/topics/{idea.TopicId}/ideas/{idea.Id}" },
                 new { rel = "topic", href = $"/api/v1/topics/{idea.TopicId}" },
-                new { rel = "vote", href = $"/api/v1/topics/{idea.TopicId}/ideas/{idea.Id}/vote" },
+                new { rel = "vote", href = $"/api/v1/ideas/{idea.Id}/votes" },
                 new { rel = "author", href = $"/api/v1/users/{idea.AuthorId}" }
             }
         };

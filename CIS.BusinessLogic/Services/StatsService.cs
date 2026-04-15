@@ -2,7 +2,6 @@ using CIS.BusinessLogic.dtos;
 using CIS.DataAcces.Data;
 using Microsoft.EntityFrameworkCore;
 using CIS.BusinessLogic.Exceptions;
-
 namespace CIS.BusinessLogic.Services;
 
 public class StatsService : IStatsService
@@ -39,6 +38,7 @@ public class StatsService : IStatsService
 
         return await query.ToListAsync();
     }
+
     public async Task<IEnumerable<TopIdeaResponse>> GetTopIdeasAsync(string? topicId = null, int? limit = null)
     {
         if (limit.HasValue && limit.Value <= 0) return Enumerable.Empty<TopIdeaResponse>();

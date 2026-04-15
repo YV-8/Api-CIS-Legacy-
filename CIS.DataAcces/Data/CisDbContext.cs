@@ -188,7 +188,7 @@ public class CisDbContext : DbContext
                 .HasForeignKey(e => e.IdeaId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.ToTable("comments", (string)null);
+            entity.ToTable("comments");
         });
 
         base.OnModelCreating(modelBuilder);

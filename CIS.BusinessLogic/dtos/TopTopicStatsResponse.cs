@@ -7,6 +7,7 @@ public record TopTopicStatsResponse
     public int IdeaCount { get; init; }
     public int TotalVotes { get; init; }
 }
+
 public record TopIdeaResponse(
     string IdeaId, 
     string Title, 

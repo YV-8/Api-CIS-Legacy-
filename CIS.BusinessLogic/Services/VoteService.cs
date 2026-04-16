@@ -1,98 +1,37 @@
 using CIS.BusinessLogic.dtos;
-using CIS.BusinessLogic.Exceptions;
-using CIS.DataAcces.Data;
-using CIS.DataAcces.Models;
-using Microsoft.EntityFrameworkCore;
+using CIS.BusinessLogic.Persistence;
+using System.Threading;
 
 namespace CIS.BusinessLogic.Services;
 
 public class VoteService : IVoteService
 {
-    private readonly CisDbContext _context;
+    private readonly IVoteRepository _votes;
 
-    public VoteService(CisDbContext context)
+    public VoteService(IVoteRepository votes)
     {
-        _context = context;
+        _votes = votes;
     }
 
-    public async Task<VoteResponse> AddVoteAsync(string ideaId, string userId)
+    public async Task<VoteResponse> AddVoteAsync(string ideaId, string? userId, CancellationToken cancellationToken = default)
     {
-        var idea = await _context.Ideas
-            .FirstOrDefaultAsync(i => i.Id == ideaId);
+        var result = await _votes.AddVoteAsync(ideaId, userId, cancellationToken);
 
-        if (idea == null)
-            throw new NotFoundException($"Idea with id '{ideaId}' not found.");
-
-        var alreadyVoted = await _context.Votes
-            .AnyAsync(v => v.IdeaId == ideaId && v.UserId == userId);
-
-        if (alreadyVoted)
-            throw new ConflictException("User has already voted on this idea.");
-
-        using var transaction = await _context.Database.BeginTransactionAsync();
-        try
+        return new VoteResponse
         {
-            var vote = new Vote
+            Id = result.VoteId,
+            IdeaId = result.IdeaId,
+            UserId = result.UserId,
+            CreatedAt = result.CreatedAt,
+            Links = new object[]
             {
-                IdeaId = ideaId,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Votes.Add(vote);
-            idea.VoteCount += 1;
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-
-            return new VoteResponse
-            {
-                Id = vote.Id,
-                IdeaId = vote.IdeaId,
-                UserId = vote.UserId!,
-                CreatedAt = vote.CreatedAt,
-                Links = new object[]
-                {
-                    new { rel = "self",   href = $"/api/v1/ideas/{ideaId}/votes" },
-                    new { rel = "idea",   href = $"/api/v1/topics/{idea.TopicId}/ideas/{ideaId}" },
-                    new { rel = "unvote", href = $"/api/v1/ideas/{ideaId}/votes" }
-                }
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+                new { rel = "self",   href = $"/api/v1/ideas/{ideaId}/votes" },
+                new { rel = "idea",   href = $"/api/v1/topics/{result.TopicId}/ideas/{ideaId}" },
+                new { rel = "unvote", href = $"/api/v1/ideas/{ideaId}/votes" }
+            }
+        };
     }
 
-    public async Task RemoveVoteAsync(string ideaId, string userId)
-    {
-        var idea = await _context.Ideas
-            .FirstOrDefaultAsync(i => i.Id == ideaId);
-
-        if (idea == null)
-            throw new NotFoundException($"Idea with id '{ideaId}' not found.");
-
-        var vote = await _context.Votes
-            .FirstOrDefaultAsync(v => v.IdeaId == ideaId && v.UserId == userId);
-
-        if (vote == null)
-            throw new NotFoundException("Vote not found for this user on this idea.");
-
-        using var transaction = await _context.Database.BeginTransactionAsync();
-        try
-        {
-            _context.Votes.Remove(vote);
-            idea.VoteCount = Math.Max(0, idea.VoteCount - 1);
-
-            await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+    public Task RemoveVoteAsync(string ideaId, string userId, CancellationToken cancellationToken = default) =>
+        _votes.RemoveVoteAsync(ideaId, userId, cancellationToken);
 }

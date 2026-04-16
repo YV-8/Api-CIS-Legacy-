@@ -2,8 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using CIS.BusinessLogic.dtos;
-using CIS.DataAcces.Models;
 using CIS.BusinessLogic.Services;
+using CIS.Api.Extensions;
+using System.Threading;
 
 namespace CIS.Api.Controllers
 {
@@ -19,10 +20,15 @@ namespace CIS.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTopics([FromQuery] TopicFilterRequest filter)
+        public async Task<IActionResult> GetTopics([FromQuery] TopicFilterRequest filter, CancellationToken cancellationToken)
         {
             const int maxSize = 50;
-            
+
+            if (filter.Page < 0)
+            {
+                return BadRequest(new { message = "Page must be greater than or equal to 0." });
+            }
+
             if (filter.Size < 1 || filter.Size > maxSize)
             {
                 return BadRequest(new { message = $"Size must be between 1 and {maxSize}." });
@@ -45,22 +51,14 @@ namespace CIS.Api.Controllers
                 toDate = dt;
             }
 
-            PaginatedResponse<TopicResponse> result;
-            try
-            {
-                
-                result = await _topicService.GetTopicsAsync(
-                    filter.Page, 
-                    filter.Size, 
-                    filter.AuthorId, 
-                    fromDate, 
-                    toDate, 
-                    filter.Sort);
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            var result = await _topicService.GetTopicsAsync(
+                filter.Page,
+                filter.Size,
+                filter.AuthorId,
+                fromDate,
+                toDate,
+                filter.Sort,
+                cancellationToken);
 
             var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
             var links = new List<string>();
@@ -87,14 +85,13 @@ namespace CIS.Api.Controllers
 
         [HttpPost]
         [Authorize]
-        public async Task<IActionResult> Create([FromBody] CreateTopicRequest request)
+        public async Task<IActionResult> Create([FromBody] CreateTopicRequest request, CancellationToken cancellationToken)
         {
-            var authorId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                          ?? User.FindFirst("sub")?.Value;
+            var authorId = User.GetSubjectId();
 
             if (authorId == null) return Unauthorized();
 
-            var newTopic = await _topicService.CreateTopicAsync(request, authorId);
+            var newTopic = await _topicService.CreateTopicAsync(request, authorId, cancellationToken);
 
             var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}/{newTopic.Id}";
 
@@ -106,6 +103,8 @@ namespace CIS.Api.Controllers
                 newTopic.AuthorId,
                 newTopic.CreatedAt,
                 newTopic.Status,
+                newTopic.AllowComments,
+                newTopic.AnonymousVote,
                 Links = new object[]
                 {
                     new { rel = "self", href = baseUrl },
@@ -119,9 +118,10 @@ namespace CIS.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(string id)
+        [Authorize]
+        public async Task<IActionResult> GetById(string id, CancellationToken cancellationToken)
         {
-            var topic = await _topicService.GetTopicByIdAsync(id);
+            var topic = await _topicService.GetTopicByIdAsync(id, cancellationToken);
 
             if (topic == null) return NotFound();
 
@@ -151,6 +151,8 @@ namespace CIS.Api.Controllers
                 topic.AuthorId,
                 topic.CreatedAt,
                 topic.Status,
+                topic.AllowComments,
+                topic.AnonymousVote,
                 Links = links.ToArray()
             };
 
@@ -159,58 +161,50 @@ namespace CIS.Api.Controllers
 
         [HttpPut("{id}")]
         [Authorize]
-        public async Task<IActionResult> Update(string id, [FromBody] UpdateTopicRequest request)
+        public async Task<IActionResult> Update(string id, [FromBody] UpdateTopicRequest request, CancellationToken cancellationToken)
         {
-            var requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                             ?? User.FindFirst("sub")?.Value;
+            var requesterId = User.GetSubjectId();
+            var requesterRole = User.GetRole();
 
-            if (requesterId == null) return Unauthorized();
+            if (requesterId == null || string.IsNullOrWhiteSpace(requesterRole)) return Unauthorized();
 
-            try
+            var updated = await _topicService.UpdateTopicAsync(id, request, requesterId, requesterRole, cancellationToken);
+
+            var baseUrl = $"{Request.Scheme}://{Request.Host}/api/v1/topics/{updated.Id}";
+
+            var response = new
             {
-                var updated = await _topicService.UpdateTopicAsync(id, request, requesterId);
-
-                var baseUrl = $"{Request.Scheme}://{Request.Host}/api/v1/topics/{updated.Id}";
-
-                var response = new
+                updated.Id,
+                updated.Title,
+                updated.Description,
+                updated.AuthorId,
+                updated.CreatedAt,
+                updated.UpdatedAt,
+                updated.Status,
+                updated.AllowComments,
+                updated.AnonymousVote,
+                Links = new object[]
                 {
-                    updated.Id,
-                    updated.Title,
-                    updated.Description,
-                    updated.AuthorId,
-                    updated.CreatedAt,
-                    updated.UpdatedAt,
-                    updated.Status,
-                    Links = new object[]
-                    {
-                        new { rel = "self", href = baseUrl },
-                        new { rel = "ideas", href = $"{baseUrl}/ideas" },
-                        new { rel = "author", href = $"{Request.Scheme}://{Request.Host}/api/v1/users/{updated.AuthorId}" }
-                    }
-                };
+                    new { rel = "self", href = baseUrl },
+                    new { rel = "ideas", href = $"{baseUrl}/ideas" },
+                    new { rel = "author", href = $"{Request.Scheme}://{Request.Host}/api/v1/users/{updated.AuthorId}" }
+                }
+            };
 
-                return Ok(response);
-            }
-            catch (KeyNotFoundException) { return NotFound(); }
-            catch (UnauthorizedAccessException) { return Forbid(); }
+            return Ok(response);
         }
 
         [HttpDelete("{id}")]
         [Authorize]
-        public async Task<IActionResult> Delete(string id)
+        public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken)
         {
-            var requesterId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                             ?? User.FindFirst("sub")?.Value;
+            var requesterId = User.GetSubjectId();
+            var requesterRole = User.GetRole();
 
-            if (requesterId == null) return Unauthorized();
+            if (requesterId == null || string.IsNullOrWhiteSpace(requesterRole)) return Unauthorized();
 
-            try
-            {
-                await _topicService.DeleteTopicAsync(id, requesterId);
-                return NoContent();
-            }
-            catch (KeyNotFoundException) { return NotFound(); }
-            catch (UnauthorizedAccessException) { return Forbid(); }
+            await _topicService.DeleteTopicAsync(id, requesterId, requesterRole, cancellationToken);
+            return NoContent();
         }
     }
 }

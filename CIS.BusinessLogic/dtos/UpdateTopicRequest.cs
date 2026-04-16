@@ -10,4 +10,8 @@ public record UpdateTopicRequest
 
     [StringLength(1000, MinimumLength = 10)]
     public string? Description { get; init; }
+
+    public bool? AllowComments { get; init; }
+
+    public bool? AnonymousVote { get; init; }
 }

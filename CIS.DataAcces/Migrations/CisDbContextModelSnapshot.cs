@@ -77,6 +77,10 @@ namespace CIS.DataAcces.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("deleted_at");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(2000)

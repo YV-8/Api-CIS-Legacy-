@@ -1,103 +1,41 @@
 using CIS.BusinessLogic.dtos;
-using CIS.DataAcces.Data;
-using Microsoft.EntityFrameworkCore;
 using CIS.BusinessLogic.Exceptions;
+using CIS.BusinessLogic.Persistence;
+using System.Threading;
+
 namespace CIS.BusinessLogic.Services;
 
 public class StatsService : IStatsService
 {
-    private readonly CisDbContext _context;
+    private readonly IStatsRepository _stats;
+    private readonly ITopicRepository _topics;
 
-    public StatsService(CisDbContext context)
+    public StatsService(IStatsRepository stats, ITopicRepository topics)
     {
-        _context = context;
+        _stats = stats;
+        _topics = topics;
     }
 
-    public async Task<IReadOnlyCollection<TopTopicStatsResponse>> GetTopTopicsByActivityAsync(int? limit = null)
+    public async Task<IReadOnlyCollection<TopTopicStatsResponse>> GetTopTopicsByActivityAsync(int? limit = null, CancellationToken cancellationToken = default)
     {
-        IQueryable<TopTopicStatsResponse> query = _context.Topics
-            .AsNoTracking()
-            .Where(topic => topic.DeletedAt == null)
-            .Select(topic => new TopTopicStatsResponse
-            {
-                TopicId = topic.Id,
-                Title = topic.Title,
-                IdeaCount = topic.Ideas.Count,
-                TotalVotes = topic.Ideas.Sum(idea => (int?)idea.VoteCount) ?? 0
-            });
-
-        query = query
-            .OrderByDescending(topic => topic.IdeaCount)
-            .ThenByDescending(topic => topic.TotalVotes)
-            .ThenBy(topic => topic.Title);
-
-        if (limit.HasValue)
-        {
-            query = query.Take(limit.Value);
-        }
-
-        return await query.ToListAsync();
+        var list = await _stats.GetTopTopicsByActivityAsync(limit, cancellationToken);
+        return list;
     }
 
-    public async Task<IEnumerable<TopIdeaResponse>> GetTopIdeasAsync(string? topicId = null, int? limit = null)
+    public async Task<IEnumerable<TopIdeaResponse>> GetTopIdeasAsync(string? topicId = null, int? limit = null, CancellationToken cancellationToken = default)
     {
-        if (limit.HasValue && limit.Value <= 0) return Enumerable.Empty<TopIdeaResponse>();
+        if (limit.HasValue && limit.Value <= 0)
+            return Enumerable.Empty<TopIdeaResponse>();
 
-        var query = _context.Ideas
-            .AsNoTracking()
-            .Where(i => i.VoteCount > 0);
+        if (!string.IsNullOrWhiteSpace(topicId) && !await _topics.ExistsActiveAsync(topicId, cancellationToken))
+            throw new NotFoundException("Topic not found");
 
-        if (!string.IsNullOrWhiteSpace(topicId))
-        {
-            var topicExists = await _context.Topics
-                .AnyAsync(t => t.Id == topicId && t.DeletedAt == null);
-
-            if (!topicExists) throw new NotFoundException("Topic not found");
-            
-            query = query.Where(i => i.TopicId == topicId);
-        }
-
-        var orderedQuery = query
-            .OrderByDescending(i => i.VoteCount)
-            .ThenByDescending(i => i.CreatedAt);
-
-        if (limit.HasValue) 
-            return await orderedQuery.Take(limit.Value)
-                .Select(i => new TopIdeaResponse(i.Id, i.Title, i.TopicId, i.AuthorId, i.VoteCount))
-                .ToListAsync();
-
-        return await orderedQuery
-            .Select(i => new TopIdeaResponse(i.Id, i.Title, i.TopicId, i.AuthorId, i.VoteCount))
-            .ToListAsync();
+        return await _stats.GetTopIdeasAsync(topicId, limit, cancellationToken);
     }
-    public async Task<IEnumerable<TopUserResponse>> GetTopUsersAsync(int? limit = null)
+
+    public async Task<IEnumerable<TopUserResponse>> GetTopUsersAsync(int? limit = null, CancellationToken cancellationToken = default)
     {
-        var ideasCount = await _context.Ideas
-        .GroupBy(i => i.AuthorId)
-        .Select(g => new { UserId = g.Key, Count = g.Count() })
-        .ToListAsync();
-        var votesCount = await _context.Votes
-        .Where(v => v.UserId != null)
-        .GroupBy(v => v.UserId)
-        .Select(g => new { UserId = g.Key!, Count = g.Count() })
-        .ToListAsync();
-
-        var activityMap = new Dictionary<string, int> ();
-        foreach (var idea in ideasCount)        
-        {
-            activityMap[idea.UserId] = idea.Count;
-        }
-        foreach (var vote in votesCount)
-        {
-            if (activityMap.ContainsKey(vote.UserId)) activityMap[vote.UserId] += vote.Count;
-            else activityMap[vote.UserId] = vote.Count;
-        }
-        var sortedResult = activityMap
-                .OrderByDescending(kv => kv.Value)
-                .Select(kv => new TopUserResponse(kv.Key, kv.Value));
-
-        if (limit.HasValue) return sortedResult.Take(limit.Value).ToList();
-
-        return sortedResult.ToList();
+        var list = await _stats.GetTopUsersAsync(limit, cancellationToken);
+        return list;
     }
 }

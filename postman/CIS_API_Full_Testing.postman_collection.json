@@ -1,0 +1,883 @@
+{
+  "info": {
+    "name": "CIS API - Full Testing",
+    "_postman_id": "6e8aa15d-2f8c-4f41-9b13-4af7e90f0012",
+    "description": "Coleccion para validar api-cis + user-management-ms. Cubre topics (incl. allowComments/anonymousVote), ideas (soft delete), comentarios, votos, estadisticas y health. JWT requiere claims sub y role (ver docs/auth-contract.md).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('seed')) {",
+          "  pm.collectionVariables.set('seed', Date.now().toString());",
+          "}",
+          "if (!pm.collectionVariables.get('rnd')) {",
+          "  pm.collectionVariables.set('rnd', Math.floor(Math.random() * 100000).toString());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Tiene campo status', () => pm.expect(json).to.have.property('status'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth (user-management-ms)",
+      "item": [
+        {
+          "name": "POST /v1/auth/login (usuario principal)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{login}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{usersBaseUrl}}/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Respuesta tiene token', () => pm.expect(json.token).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('token', json.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/login (usuario secundario)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{otherLogin}}\",\n  \"password\": \"{{otherPassword}}\"\n}"
+            },
+            "url": "{{usersBaseUrl}}/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login secundario 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('otherToken', json.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /v1/auth/login (credenciales invalidas)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{login}}\",\n  \"password\": \"incorrecta\"\n}"
+            },
+            "url": "{{usersBaseUrl}}/v1/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login inválido retorna 401/400', () => pm.expect(pm.response.code).to.be.oneOf([400,401]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Topics",
+      "item": [
+        {
+          "name": "GET /api/v1/topics (listado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics?page=0&size=10&sort=createdAt,desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Respuesta paginada', () => {",
+                  "  pm.expect(json).to.have.property('content');",
+                  "  pm.expect(json).to.have.property('page');",
+                  "  pm.expect(json).to.have.property('size');",
+                  "  pm.expect(json).to.have.property('totalElements');",
+                  "  pm.expect(json).to.have.property('totalPages');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/topics (size invalido)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics?page=0&size=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/topics (crear)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Topic API {{seed}}\",\n  \"description\": \"Descripcion valida de prueba para topic {{seed}}\",\n  \"allowComments\": true,\n  \"anonymousVote\": false\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Topic creado con id', () => pm.expect(json.id).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('topicId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/topics (sin token)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Topic sin auth\",\n  \"description\": \"Descripcion valida para probar autenticacion\",\n  \"allowComments\": true,\n  \"anonymousVote\": false\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/topics/{id} (requiere JWT)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Id coincide', () => pm.expect(json.id).to.eql(pm.collectionVariables.get('topicId')));",
+                  "pm.test('Campos de topic', () => {",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json).to.have.property('allowComments');",
+                  "  pm.expect(json).to.have.property('anonymousVote');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/topics/{id} (sin token)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/v1/topics/{id} (actualizar autor)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Topic actualizado {{seed}}\",\n  \"description\": \"Descripcion actualizada para pruebas de autorizacion\",\n  \"allowComments\": true,\n  \"anonymousVote\": false\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/v1/topics/{id} (actualizar otro usuario)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{otherToken}}", "type": "string" }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Intento update otro usuario\",\n  \"description\": \"Descripcion actualizada por usuario secundario\",\n  \"allowComments\": true,\n  \"anonymousVote\": false\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 o 403 (segun rol del token secundario)', () => pm.expect(pm.response.code).to.be.oneOf([200,403]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Ideas",
+      "item": [
+        {
+          "name": "POST /api/v1/topics/{topicId}/ideas (crear)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Idea {{seed}}\",\n  \"description\": \"Descripcion valida de idea para pruebas end-to-end\"\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Idea creada con id', () => pm.expect(json.id).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('ideaId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/topics/{topicId}/ideas (topic inexistente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Idea topic fake\",\n  \"description\": \"Descripcion valida para topic inexistente\"\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/fake-topic/ideas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/topics/{topicId}/ideas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas?page=0&size=10&sort=voteCount,desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Lista paginada de ideas', () => pm.expect(json).to.have.property('content'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/v1/topics/{topicId}/ideas/{ideaId} (actualizar)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Idea actualizada {{seed}}\",\n  \"description\": \"Descripcion de idea actualizada para validacion\"\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas/{{ideaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /api/v1/topics/{topicId}/ideas/{ideaId} (otro usuario)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{otherToken}}", "type": "string" }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Idea editada por otro usuario\",\n  \"description\": \"Descripcion modificada por usuario secundario\"\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas/{{ideaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 o 403 (segun rol)', () => pm.expect(pm.response.code).to.be.oneOf([200,403]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Comments",
+      "item": [
+        {
+          "name": "POST /api/v1/topics/{topicId}/ideas/{ideaId}/comments (crear)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Comentario de prueba {{seed}} — contenido valido para la idea.\"\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas/{{ideaId}}/comments"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Comentario con id', () => pm.expect(json.id).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('commentId', json.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/topics/{topicId}/ideas/{ideaId}/comments (listado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas/{{ideaId}}/comments?page=0&size=10&sort=createdAt,desc"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Paginado', () => {",
+                  "  pm.expect(json).to.have.property('content');",
+                  "  pm.expect(json).to.have.property('totalElements');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/.../comments (sin token)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Comentario sin autenticacion\"\n}"
+            },
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas/{{ideaId}}/comments"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Votes",
+      "item": [
+        {
+          "name": "POST /api/v1/ideas/{ideaId}/votes (sin token, topic sin voto anonimo)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/ideas/{{ideaId}}/votes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/ideas/{ideaId}/votes (votar)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/ideas/{{ideaId}}/votes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Respuesta de voto', () => {",
+                  "  pm.expect(json).to.have.property('ideaId');",
+                  "  pm.expect(json).to.have.property('createdAt');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/v1/ideas/{ideaId}/votes (voto duplicado)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/ideas/{{ideaId}}/votes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/v1/ideas/{ideaId}/votes (quitar voto)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/ideas/{{ideaId}}/votes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/v1/ideas/{ideaId}/votes (sin voto)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/ideas/{{ideaId}}/votes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Stats",
+      "item": [
+        {
+          "name": "GET /api/v1/stats/top",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/stats/top?limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Respuesta arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/stats/ideas/top",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/stats/ideas/top?limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Respuesta arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/stats/ideas/top (filtrado por topicId)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/stats/ideas/top?topicId={{topicId}}&limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Respuesta arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/stats/topics/{topicId}/ideas/top",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/stats/topics/{{topicId}}/ideas/top?limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Respuesta arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/stats/users/top",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/stats/users/top?limit=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Respuesta arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/v1/stats/top (limit invalido)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/stats/top?limit=0"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "99 - Cleanup",
+      "item": [
+        {
+          "name": "DELETE /api/v1/topics/{topicId}/ideas/{ideaId} (soft delete idea)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}/ideas/{{ideaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Mensaje de borrado', () => pm.expect(json).to.have.property('message'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/v1/topics/{topicId} (cleanup topic)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{cisBaseUrl}}/api/v1/topics/{{topicId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204 o 404', () => pm.expect(pm.response.code).to.be.oneOf([204,404]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "cisBaseUrl", "value": "http://localhost:5000" },
+    { "key": "usersBaseUrl", "value": "http://localhost:8081" },
+    { "key": "login", "value": "admin" },
+    { "key": "password", "value": "admin123" },
+    { "key": "otherLogin", "value": "user1" },
+    { "key": "otherPassword", "value": "user123" },
+    { "key": "token", "value": "" },
+    { "key": "otherToken", "value": "" },
+    { "key": "topicId", "value": "" },
+    { "key": "ideaId", "value": "" },
+    { "key": "commentId", "value": "" },
+    { "key": "seed", "value": "" },
+    { "key": "rnd", "value": "" }
+  ]
+}

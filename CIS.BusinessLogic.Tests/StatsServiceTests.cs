@@ -1,6 +1,8 @@
+using CIS.BusinessLogic.Domain;
 using CIS.BusinessLogic.Services;
 using CIS.DataAcces.Data;
 using CIS.DataAcces.Models;
+using CIS.DataAcces.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 namespace CIS.BusinessLogic.Tests;
@@ -59,7 +61,7 @@ public class StatsServiceTests
         );
         await context.SaveChangesAsync();
 
-        var service = new StatsService(context);
+        var service = new StatsService(new StatsRepository(context), new TopicRepository(context));
 
         var result = await service.GetTopTopicsByActivityAsync();
 
@@ -104,7 +106,7 @@ public class StatsServiceTests
         );
         await context.SaveChangesAsync();
 
-        var service = new StatsService(context);
+        var service = new StatsService(new StatsRepository(context), new TopicRepository(context));
 
         var result = await service.GetTopTopicsByActivityAsync(limit: 1);
 

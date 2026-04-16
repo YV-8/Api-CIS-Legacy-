@@ -1,23 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using CIS.BusinessLogic.Domain;
 
 namespace CIS.DataAcces.Models;
-
-public enum TopicStatus
-{
-    draft,
-    active,
-    inactive,
-    archive
-}
-
-public enum TopicType
-{
-    election,
-    market_research,
-    survey,
-    other
-}
 
 public class Topic
 {

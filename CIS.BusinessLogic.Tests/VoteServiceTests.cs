@@ -1,7 +1,9 @@
+using CIS.BusinessLogic.Domain;
 using CIS.BusinessLogic.Exceptions;
 using CIS.BusinessLogic.Services;
 using CIS.DataAcces.Data;
 using CIS.DataAcces.Models;
+using CIS.DataAcces.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -19,7 +21,7 @@ public class VoteServiceTests
         return new CisDbContext(options);
     }
 
-    private static async Task<Idea> SeedIdeaAsync(CisDbContext context, int voteCount = 0)
+    private static async Task<Idea> SeedIdeaAsync(CisDbContext context, int voteCount = 0, bool anonymousVote = false)
     {
         var topic = new Topic
         {
@@ -28,6 +30,7 @@ public class VoteServiceTests
             AuthorId = "author-1",
             Type = TopicType.other,
             Status = TopicStatus.active,
+            AnonymousVote = anonymousVote,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -57,7 +60,7 @@ public class VoteServiceTests
     {
         await using var context = CreateInMemoryContext();
         var idea = await SeedIdeaAsync(context);
-        var service = new VoteService(context);
+        var service = new VoteService(new VoteRepository(context));
         const string userId = "user-1";
 
         var result = await service.AddVoteAsync(idea.Id, userId);
@@ -80,7 +83,7 @@ public class VoteServiceTests
     public async Task AddVoteAsync_WhenIdeaNotFound_ThrowsNotFoundException()
     {
         await using var context = CreateInMemoryContext();
-        var service = new VoteService(context);
+        var service = new VoteService(new VoteRepository(context));
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             service.AddVoteAsync("non-existent-idea-id", "user-1"));
@@ -94,10 +97,37 @@ public class VoteServiceTests
         context.Votes.Add(new Vote { IdeaId = idea.Id, UserId = "user-1", CreatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
 
-        var service = new VoteService(context);
+        var service = new VoteService(new VoteRepository(context));
 
         await Assert.ThrowsAsync<ConflictException>(() =>
             service.AddVoteAsync(idea.Id, "user-1"));
+    }
+
+    [Fact]
+    public async Task AddVoteAsync_WhenTopicAllowsAnonymousVote_CreatesVoteWithNullUserId()
+    {
+        await using var context = CreateInMemoryContext();
+        var idea = await SeedIdeaAsync(context, anonymousVote: true);
+        var service = new VoteService(new VoteRepository(context));
+
+        var result = await service.AddVoteAsync(idea.Id, null);
+
+        var voteInDb = await context.Votes.FirstOrDefaultAsync(v => v.IdeaId == idea.Id);
+
+        Assert.NotNull(voteInDb);
+        Assert.Null(voteInDb!.UserId);
+        Assert.Null(result.UserId);
+    }
+
+    [Fact]
+    public async Task AddVoteAsync_WithoutUserAndWithoutAnonymousTopic_ThrowsAuthenticationRequiredException()
+    {
+        await using var context = CreateInMemoryContext();
+        var idea = await SeedIdeaAsync(context);
+        var service = new VoteService(new VoteRepository(context));
+
+        await Assert.ThrowsAsync<AuthenticationRequiredException>(() =>
+            service.AddVoteAsync(idea.Id, null));
     }
 
     // RemoveVoteAsync tests
@@ -110,7 +140,7 @@ public class VoteServiceTests
         context.Votes.Add(new Vote { IdeaId = idea.Id, UserId = "user-1", CreatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
 
-        var service = new VoteService(context);
+        var service = new VoteService(new VoteRepository(context));
 
         await service.RemoveVoteAsync(idea.Id, "user-1");
 
@@ -125,7 +155,7 @@ public class VoteServiceTests
     public async Task RemoveVoteAsync_WhenIdeaNotFound_ThrowsNotFoundException()
     {
         await using var context = CreateInMemoryContext();
-        var service = new VoteService(context);
+        var service = new VoteService(new VoteRepository(context));
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             service.RemoveVoteAsync("non-existent-idea-id", "user-1"));
@@ -136,7 +166,7 @@ public class VoteServiceTests
     {
         await using var context = CreateInMemoryContext();
         var idea = await SeedIdeaAsync(context);
-        var service = new VoteService(context);
+        var service = new VoteService(new VoteRepository(context));
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             service.RemoveVoteAsync(idea.Id, "user-1"));

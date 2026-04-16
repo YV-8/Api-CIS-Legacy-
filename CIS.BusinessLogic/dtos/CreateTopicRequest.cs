@@ -11,4 +11,8 @@ public record CreateTopicRequest
     [Required(ErrorMessage = "Description is required")]
     [StringLength(1000, MinimumLength = 10)]
     public string Description { get; init; } = string.Empty;
+
+    public bool AllowComments { get; init; } = true;
+
+    public bool AnonymousVote { get; init; } = false;
 }

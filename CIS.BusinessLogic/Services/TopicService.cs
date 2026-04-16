@@ -1,91 +1,43 @@
+using CIS.BusinessLogic.Domain;
 using CIS.BusinessLogic.dtos;
-using CIS.DataAcces.Models;
-using CIS.DataAcces.Data;
-using Microsoft.EntityFrameworkCore;
-using CIS.BusinessLogic.Helpers;
+using CIS.BusinessLogic.Exceptions;
+using CIS.BusinessLogic.Persistence;
+using System.Threading;
 
 namespace CIS.BusinessLogic.Services;
+
 public class TopicService : ITopicService
 {
-    private readonly CisDbContext _context;
-
-    public TopicService(CisDbContext context)
+    private static readonly HashSet<string> PrivilegedRoles = new(StringComparer.OrdinalIgnoreCase)
     {
-        _context = context;
+        "ADMIN",
+        "OWNER"
+    };
+
+    private readonly ITopicRepository _topics;
+
+    public TopicService(ITopicRepository topics)
+    {
+        _topics = topics;
     }
 
-    public async Task<Topic> CreateTopicAsync(CreateTopicRequest request, string authorId)
+    public async Task<TopicDetails> CreateTopicAsync(CreateTopicRequest request, string authorId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(authorId))
             throw new ArgumentException("AuthorId is required", nameof(authorId));
 
-        var topic = new Topic
-        {
-            Title = request.Title,
-            Description = request.Description,
-            AuthorId = authorId,
-            Type = TopicType.other,
-            Status = TopicStatus.draft,
-            VoteType = "single",
-        };
-
-        _context.Topics.Add(topic);
-        await _context.SaveChangesAsync();
-
-        return topic;
+        return await _topics.InsertAsync(request, authorId, cancellationToken);
     }
 
-    public async Task<PaginatedResponse<TopicResponse>> GetTopicsAsync(int page, int size, string? authorId, DateTime? createdFrom, DateTime? createdTo, string[]? sort)
+    public async Task<PaginatedResponse<TopicResponse>> GetTopicsAsync(int page, int size, string? authorId, DateTime? createdFrom, DateTime? createdTo, string[]? sort, CancellationToken cancellationToken = default)
     {
-        var query = _context.Topics.AsQueryable();
-
-        // Filters
-        if (!string.IsNullOrEmpty(authorId))
-        {
-            query = query.Where(t => t.AuthorId == authorId);
-        }
-
-        if (createdFrom.HasValue)
-        {
-            query = query.Where(t => t.CreatedAt >= createdFrom.Value);
-        }
-
-        if (createdTo.HasValue)
-        {
-            var endOfDay = createdTo.Value.Date.AddDays(1).AddTicks(-1);
-            query = query.Where(t => t.CreatedAt <= endOfDay);
-        }
-
-        // Sorting
-        var whitelist = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "createdAt", "CreatedAt" }
-        };
-
-        if (sort != null && sort.Length > 0)
-        {
-            query = query.ApplySorting(sort, whitelist);
-        }
-        else
-        {
-            query = query.OrderByDescending(t => t.CreatedAt);
-        }
-
-        // Pagination
         if (size <= 0)
-        {
             throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than zero.");
-        }
 
-        var totalElements = await query.CountAsync();
+        var (items, totalElements) = await _topics.GetPagedAsync(page, size, authorId, createdFrom, createdTo, sort, cancellationToken);
         var totalPages = (int)Math.Ceiling((double)totalElements / size);
 
-        var topics = await query
-            .Skip(page * size)
-            .Take(size)
-            .ToListAsync();
-
-        var content = topics.Select(t => new TopicResponse
+        var content = items.Select(t => new TopicResponse
         {
             Id = t.Id,
             Title = t.Title,
@@ -93,6 +45,8 @@ public class TopicService : ITopicService
             AuthorId = t.AuthorId,
             CreatedAt = t.CreatedAt,
             Status = t.Status,
+            AllowComments = t.AllowComments,
+            AnonymousVote = t.AnonymousVote,
             Links = new object[]
             {
                 new { rel = "self", href = $"/api/v1/topics/{t.Id}" }
@@ -109,45 +63,39 @@ public class TopicService : ITopicService
         };
     }
 
-    public async Task<Topic?> GetTopicByIdAsync(string id)
-    {
-        return await _context.Topics.FindAsync(id);
-    }
+    public Task<TopicDetails?> GetTopicByIdAsync(string id, CancellationToken cancellationToken = default) =>
+        _topics.FindActiveByIdAsync(id, cancellationToken);
 
-    public async Task<Topic> UpdateTopicAsync(string id, UpdateTopicRequest request, string requesterId)
+    public async Task<TopicDetails> UpdateTopicAsync(string id, UpdateTopicRequest request, string requesterId, string requesterRole, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(requesterId))
             throw new ArgumentException("RequesterId is required", nameof(requesterId));
 
-        var topic = await _context.Topics.FindAsync(id);
+        var topic = await _topics.FindActiveByIdAsync(id, cancellationToken);
         if (topic == null)
-            throw new KeyNotFoundException("Topic not found");
+            throw new NotFoundException("Topic not found");
 
-        if (topic.AuthorId != requesterId)
-            throw new UnauthorizedAccessException("Not allowed to update this topic");
+        if (topic.AuthorId != requesterId && !PrivilegedRoles.Contains(requesterRole))
+            throw new ForbiddenException("Not allowed to update this topic");
 
-        topic.Title = request.Title;
-        topic.Description = request.Description;
-        topic.UpdatedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync();
-
-        return topic;
+        var updated = await _topics.TryUpdateAsync(id, request, cancellationToken);
+        return updated ?? throw new NotFoundException("Topic not found");
     }
 
-    public async Task DeleteTopicAsync(string id, string requesterId)
+    public async Task DeleteTopicAsync(string id, string requesterId, string requesterRole, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(requesterId))
             throw new ArgumentException("RequesterId is required", nameof(requesterId));
 
-        var topic = await _context.Topics.FindAsync(id);
+        var topic = await _topics.FindActiveByIdAsync(id, cancellationToken);
         if (topic == null)
-            throw new KeyNotFoundException("Topic not found");
+            throw new NotFoundException("Topic not found");
 
-        if (topic.AuthorId != requesterId)
-            throw new UnauthorizedAccessException("Not allowed to delete this topic");
+        if (topic.AuthorId != requesterId && !PrivilegedRoles.Contains(requesterRole))
+            throw new ForbiddenException("Not allowed to delete this topic");
 
-        _context.Topics.Remove(topic);
-        await _context.SaveChangesAsync();
+        var deleted = await _topics.TrySoftDeleteAsync(id, cancellationToken);
+        if (!deleted)
+            throw new NotFoundException("Topic not found");
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
-using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
+using CIS.Api.ExceptionHandling;
+using CIS.DataAcces;
 using CIS.DataAcces.Data;
 using CIS.BusinessLogic.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,6 +14,8 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -43,6 +46,20 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+var jwtSection = builder.Configuration.GetSection("Auth:Jwt");
+var jwtSecret = jwtSection["Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret))
+{
+    throw new InvalidOperationException("Missing required configuration: Auth:Jwt:Secret");
+}
+
+var jwtRequireIssuer = jwtSection.GetValue<bool>("RequireIssuer");
+var jwtRequireAudience = jwtSection.GetValue<bool>("RequireAudience");
+var jwtIssuer = jwtSection["Issuer"];
+var jwtAudience = jwtSection["Audience"];
+var jwtClockSkewSeconds = jwtSection.GetValue("ClockSkewSeconds", 60);
+var signingKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtSecret));
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -50,23 +67,58 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuer = false,
-        ValidateAudience = false,
+        ValidateIssuer = jwtRequireIssuer,
+        ValidateAudience = jwtRequireAudience,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes("TuClaveSuperSecretaDeAlMenos32Chars!"))
+        RequireExpirationTime = true,
+        RequireSignedTokens = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        NameClaimType = JwtRegisteredClaimNames.Sub,
+        RoleClaimType = "role",
+        ClockSkew = TimeSpan.FromSeconds(jwtClockSkewSeconds),
+        IssuerSigningKey = signingKey
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = context =>
+        {
+            var sub = context.Principal?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            var role = context.Principal?.FindFirst("role")?.Value;
+
+            if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(role))
+            {
+                context.Fail("JWT is missing required claims: sub and role.");
+            }
+
+            return Task.CompletedTask;
+        }
     };
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<CisDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+var useInMemoryForTests = builder.Configuration.GetValue<bool>("Testing:UseInMemoryDatabase");
+if (useInMemoryForTests)
+{
+    builder.Services.AddDbContext<CisDbContext>(options =>
+        options.UseInMemoryDatabase("cis_api_tests_" + Guid.NewGuid()));
+}
+else
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    builder.Services.AddDbContext<CisDbContext>(options =>
+        options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+}
+
+builder.Services.AddCisPersistence();
 
 builder.Services.AddScoped<ITopicService, TopicService>();
 builder.Services.AddScoped<IIdeaService, IdeaService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IVoteService, VoteService>();
 builder.Services.AddScoped<IStatsService, StatsService>();
 
@@ -74,6 +126,8 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<CisDbContext>();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
@@ -85,57 +139,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapGet("/auth/debug-token", () =>
-    {
-        var key = new SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes("TuClaveSuperSecretaDeAlMenos32Chars!"));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
-        {
-            new Claim("sub", "user-123"),
-            new Claim("name", "Juan Pérez"),
-            new Claim(ClaimTypes.NameIdentifier, "user-123")
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: null,
-            audience: null,
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(365),
-            signingCredentials: creds
-        );
-
-        return new { token = new JwtSecurityTokenHandler().WriteToken(token) };
-    });
-
-    app.MapGet("/auth/debug-token-other", () =>
-    {
-        var key = new SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes("TuClaveSuperSecretaDeAlMenos32Chars!"));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
-        {
-            new Claim("sub", "user-999"),
-            new Claim("name", "Otro Usuario"),
-            new Claim(ClaimTypes.NameIdentifier, "user-999")
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: null,
-            audience: null,
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(365),
-            signingCredentials: creds
-        );
-
-        return new { token = new JwtSecurityTokenHandler().WriteToken(token) };
-    });
-}
 
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
@@ -152,3 +155,5 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 });
 
 app.Run();
+
+public partial class Program { }

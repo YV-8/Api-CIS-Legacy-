@@ -119,14 +119,29 @@ namespace CIS.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize]
         public async Task<IActionResult> GetById(string id)
         {
             var topic = await _topicService.GetTopicByIdAsync(id);
 
             if (topic == null) return NotFound();
 
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? User.FindFirst("sub")?.Value;
+
             var baseUrl = $"{Request.Scheme}://{Request.Host}/api/v1/topics/{topic.Id}";
+
+            var links = new List<object>
+            {
+                new { rel = "self", href = baseUrl },
+                new { rel = "ideas", href = $"{baseUrl}/ideas" },
+                new { rel = "author", href = $"{Request.Scheme}://{Request.Host}/api/v1/users/{topic.AuthorId}" }
+            };
+
+            if (userId == topic.AuthorId)
+            {
+                links.Add(new { rel = "update", href = baseUrl, method = "PUT" });
+                links.Add(new { rel = "delete", href = baseUrl, method = "DELETE" });
+            }
 
             var response = new
             {
@@ -136,12 +151,7 @@ namespace CIS.Api.Controllers
                 topic.AuthorId,
                 topic.CreatedAt,
                 topic.Status,
-                Links = new object[]
-                {
-                    new { rel = "self", href = baseUrl },
-                    new { rel = "ideas", href = $"{baseUrl}/ideas" },
-                    new { rel = "author", href = $"{Request.Scheme}://{Request.Host}/api/v1/users/{topic.AuthorId}" }
-                }
+                Links = links.ToArray()
             };
 
             return Ok(response);

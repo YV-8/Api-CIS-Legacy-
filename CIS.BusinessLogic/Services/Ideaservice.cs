@@ -38,7 +38,7 @@ public class IdeaService : IIdeaService
         _context.Ideas.Add(idea);
         await _context.SaveChangesAsync();
 
-        return MapIdeaResponse(idea);
+        return await MapIdeaResponseAsync(idea, authorId);
     }
 
     public async Task<PaginatedResponse<IdeaResponse>> GetIdeasAsync(
@@ -112,7 +112,7 @@ public class IdeaService : IIdeaService
 
         await _context.SaveChangesAsync();
 
-        return MapIdeaResponse(idea);
+        return await MapIdeaResponseAsync(idea, currentUserId);
     }
 
     public async Task DeleteIdeaAsync(string topicId, string ideaId, string currentUserId)
@@ -182,6 +182,42 @@ public class IdeaService : IIdeaService
                 new { rel = "vote", href = $"/api/v1/ideas/{idea.Id}/votes" },
                 new { rel = "author", href = $"/api/v1/users/{idea.AuthorId}" }
             }
+        };
+    }
+
+    private async Task<IdeaResponse> MapIdeaResponseAsync(Idea idea, string? currentUserId)
+    {
+        var links = new List<object>
+        {
+            new { rel = "self", href = $"/api/v1/topics/{idea.TopicId}/ideas/{idea.Id}" },
+            new { rel = "topic", href = $"/api/v1/topics/{idea.TopicId}" },
+            new { rel = "author", href = $"/api/v1/users/{idea.AuthorId}" }
+        };
+
+        if (!string.IsNullOrEmpty(currentUserId))
+        {
+            var hasVoted = await _context.Votes
+                .AnyAsync(v => v.IdeaId == idea.Id && v.UserId == currentUserId);
+            if (hasVoted)
+                links.Add(new { rel = "unvote", href = $"/api/v1/ideas/{idea.Id}/votes", method = "DELETE" });
+            else
+                links.Add(new { rel = "vote", href = $"/api/v1/ideas/{idea.Id}/votes", method = "POST" });
+        }
+        else
+        {
+            links.Add(new { rel = "vote", href = $"/api/v1/ideas/{idea.Id}/votes", method = "POST" });
+        }
+
+        return new IdeaResponse
+        {
+            Id = idea.Id,
+            Title = idea.Title,
+            Description = idea.Description,
+            AuthorId = idea.AuthorId,
+            TopicId = idea.TopicId,
+            VoteCount = idea.VoteCount,
+            CreatedAt = idea.CreatedAt,
+            Links = links.ToArray()
         };
     }
 

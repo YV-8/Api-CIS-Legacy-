@@ -1,8 +1,8 @@
-using System.Security.Claims;
-using CIS.BusinessLogic.Exceptions;
 using CIS.BusinessLogic.Services;
+using CIS.Api.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading;
 
 namespace CIS.Api.Controllers;
 
@@ -18,48 +18,24 @@ public class VotesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize]
-    public async Task<IActionResult> AddVote(string ideaId)
+    public async Task<IActionResult> AddVote(string ideaId, CancellationToken cancellationToken)
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
+        var userId = User.GetSubjectId();
 
-        if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized();
-
-        try
-        {
-            var result = await _voteService.AddVoteAsync(ideaId, userId);
-            return StatusCode(StatusCodes.Status201Created, result);
-        }
-        catch (NotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (ConflictException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        var result = await _voteService.AddVoteAsync(ideaId, userId, cancellationToken);
+        return StatusCode(StatusCodes.Status201Created, result);
     }
 
     [HttpDelete]
     [Authorize]
-    public async Task<IActionResult> RemoveVote(string ideaId)
+    public async Task<IActionResult> RemoveVote(string ideaId, CancellationToken cancellationToken)
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value;
+        var userId = User.GetSubjectId();
 
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized();
 
-        try
-        {
-            await _voteService.RemoveVoteAsync(ideaId, userId);
-            return NoContent();
-        }
-        catch (NotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        await _voteService.RemoveVoteAsync(ideaId, userId, cancellationToken);
+        return NoContent();
     }
 }

@@ -1,7 +1,9 @@
-﻿using CIS.BusinessLogic.dtos;
+﻿using CIS.BusinessLogic.Domain;
+using CIS.BusinessLogic.dtos;
 using CIS.BusinessLogic.Services;
 using CIS.DataAcces.Data;
 using CIS.DataAcces.Models;
+using CIS.DataAcces.Repositories;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
@@ -25,7 +27,7 @@ public class TopicServiceTests
     public async Task CreateTopicAsync_WhenAuthorIdIsEmpty_ThrowsArgumentException()
     {
         await using var context = CreateInMemoryContext();
-        var service = new TopicService(context);
+        var service = new TopicService(new TopicRepository(context));
 
         var request = new CreateTopicRequest
         {
@@ -47,7 +49,7 @@ public class TopicServiceTests
         );
         await context.SaveChangesAsync();
 
-        var service = new TopicService(context);
+        var service = new TopicService(new TopicRepository(context));
 
         var result = await service.GetTopicsAsync(page: 0, size: 2, authorId: "author1", createdFrom: new DateTime(2025, 1, 1), createdTo: new DateTime(2025, 12, 31), sort: new[] { "createdAt,desc" });
 
@@ -67,12 +69,58 @@ public class TopicServiceTests
         context.Topics.Add(new Topic { Title = "t1", Description = "desc1", AuthorId = "author1", Type = TopicType.other, Status = TopicStatus.active, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
 
-        var service = new TopicService(context);
+        var service = new TopicService(new TopicRepository(context));
 
         var result = await service.GetTopicsAsync(page: 5, size: 10, authorId: null, createdFrom: null, createdTo: null, sort: null);
 
         Assert.Empty(result.Content);
         Assert.Equal(1, result.TotalElements);
         Assert.Equal(1, result.TotalPages);
+    }
+
+    [Fact]
+    public async Task DeleteTopicAsync_PerformsSoftDeleteAndSoftDeletesIdeas()
+    {
+        await using var context = CreateInMemoryContext();
+
+        var topic = new Topic
+        {
+            Title = "t1",
+            Description = "desc1",
+            AuthorId = "author1",
+            Type = TopicType.other,
+            Status = TopicStatus.active,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        var idea = new Idea
+        {
+            Title = "idea1",
+            Description = "desc",
+            TopicId = topic.Id,
+            AuthorId = "author1",
+            VoteCount = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        context.Topics.Add(topic);
+        context.Ideas.Add(idea);
+        await context.SaveChangesAsync();
+
+        var service = new TopicService(new TopicRepository(context));
+
+        await service.DeleteTopicAsync(topic.Id, "author1", "USER");
+
+        var storedTopic = await context.Topics.FindAsync(topic.Id);
+        var storedIdea = await context.Ideas.FindAsync(idea.Id);
+        var visibleTopics = await service.GetTopicsAsync(0, 10, null, null, null, null);
+
+        Assert.NotNull(storedTopic);
+        Assert.NotNull(storedTopic!.DeletedAt);
+        Assert.NotNull(storedIdea);
+        Assert.NotNull(storedIdea!.DeletedAt);
+        Assert.Empty(visibleTopics.Content);
     }
 }

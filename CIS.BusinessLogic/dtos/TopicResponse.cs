@@ -1,4 +1,4 @@
-using CIS.DataAcces.Models;
+using CIS.BusinessLogic.Domain;
 
 namespace CIS.BusinessLogic.dtos;
 
@@ -10,5 +10,7 @@ public record TopicResponse
     public string AuthorId { get; init; } = string.Empty;
     public DateTime CreatedAt { get; init; }
     public TopicStatus Status { get; init; }
+    public bool AllowComments { get; init; }
+    public bool AnonymousVote { get; init; }
     public object[] Links { get; init; } = Array.Empty<object>();
 }

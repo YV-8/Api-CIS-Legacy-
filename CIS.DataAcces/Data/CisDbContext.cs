@@ -113,6 +113,10 @@ public class CisDbContext : DbContext
                 .HasColumnName("updated_at")
                 .HasColumnType("datetime");
 
+            entity.Property(e => e.DeletedAt)
+                .HasColumnName("deleted_at")
+                .HasColumnType("datetime");
+
             entity.HasOne(e => e.Topic)
                 .WithMany(t => t.Ideas)
                 .HasForeignKey(e => e.TopicId)

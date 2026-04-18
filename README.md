@@ -45,6 +45,19 @@ En producción se inyecta mediante la variable de entorno:
 ConnectionStrings__DefaultConnection=Server=...;Database=...;User=...;Password=...;
 ```
 
+Configuración JWT para validar tokens emitidos por `user-management-ms`:
+
+```
+Auth__Jwt__Secret=...
+Auth__Jwt__Issuer=...
+Auth__Jwt__Audience=...
+Auth__Jwt__RequireIssuer=false
+Auth__Jwt__RequireAudience=false
+Auth__Jwt__ClockSkewSeconds=60
+```
+
+> `Auth__Jwt__Secret` es obligatorio y debe configurarse por entorno.
+
 ---
 
 ## Ejecutar la aplicación
@@ -82,3 +95,8 @@ Cambios implementados en esta historia de usuario:
 - Configurada la cadena de conexión vía `appsettings.json` y variable de entorno
 - Agregado endpoint `GET /health` con verificación de conectividad a MySQL
 - Eliminados archivos de muestra (`WeatherForecast`)
+
+
+Ejecución de tests
+
+dotnet test CIS.Api.Tests/CIS.Api.Tests.csproj

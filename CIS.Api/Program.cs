@@ -105,7 +105,7 @@ var useInMemoryForTests = builder.Configuration.GetValue<bool>("Testing:UseInMem
 if (useInMemoryForTests)
 {
     builder.Services.AddDbContext<CisDbContext>(options =>
-        options.UseInMemoryDatabase("cis_api_tests_" + Guid.NewGuid()));
+        options.UseInMemoryDatabase("cis_api_tests_shared"));
 }
 else
 {

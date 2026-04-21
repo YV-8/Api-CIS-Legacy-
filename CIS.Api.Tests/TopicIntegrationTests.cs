@@ -1,0 +1,214 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
+using Microsoft.IdentityModel.Tokens;
+using Xunit;
+
+namespace CIS.Api.Tests;
+
+public class TopicIntegrationTest: IclassFixture<CisApiFactory>
+{
+    [ApiController]
+    [Route("api/v1/[controller]")]
+    public class TopicsController : ControllerBase
+    {
+        private readonly ITopicService _topicService;
+ 
+        public TopicsController(ITopicService topicService)
+        {
+            _topicService = topicService;
+        }
+ 
+        [HttpGet]
+        public async Task<IActionResult> GetTopics([FromQuery] TopicFilterRequest filter, CancellationToken cancellationToken)
+        {
+            const int maxSize = 50;
+ 
+            if (filter.Page < 0)
+            {
+                return BadRequest(new { message = "Page must be greater than or equal to 0." });
+            }
+ 
+            if (filter.Size < 1 || filter.Size > maxSize)
+            {
+                return BadRequest(new { message = $"Size must be between 1 and {maxSize}." });
+            }
+ 
+            DateTime? fromDate = null;
+            DateTime? toDate = null;
+ 
+            if (!string.IsNullOrEmpty(filter.CreatedFrom))
+            {
+                if (!DateTime.TryParse(filter.CreatedFrom, out var d))
+                    return BadRequest(new { message = "Invalid createdFrom date format. Use YYYY-MM-DD." });
+                fromDate = d;
+            }
+ 
+            if (!string.IsNullOrEmpty(filter.CreatedTo))
+            {
+                if (!DateTime.TryParse(filter.CreatedTo, out var dt))
+                    return BadRequest(new { message = "Invalid createdTo date format. Use YYYY-MM-DD." });
+                toDate = dt;
+            }
+ 
+            var result = await _topicService.GetTopicsAsync(
+                filter.Page,
+                filter.Size,
+                filter.AuthorId,
+                fromDate,
+                toDate,
+                filter.Sort,
+                cancellationToken);
+ 
+            var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
+            var links = new List<string>();
+ 
+            if (filter.Page > 0)
+            {
+                links.Add($"<{baseUrl}?page=0&size={filter.Size}>; rel=\"first\"");
+                links.Add($"<{baseUrl}?page={filter.Page - 1}&size={filter.Size}>; rel=\"prev\"");
+            }
+ 
+            if (filter.Page < result.TotalPages - 1)
+            {
+                links.Add($"<{baseUrl}?page={filter.Page + 1}&size={filter.Size}>; rel=\"next\"");
+                links.Add($"<{baseUrl}?page={result.TotalPages - 1}&size={filter.Size}>; rel=\"last\"");
+            }
+ 
+            if (links.Any())
+            {
+                Response.Headers.Append("Link", string.Join(", ", links));
+            }
+ 
+            return Ok(result);
+        }
+ 
+        [HttpPost]
+        [Authorize]
+        public async Task<IActionResult> Create([FromBody] CreateTopicRequest request, CancellationToken cancellationToken)
+        {
+            var authorId = User.GetSubjectId();
+ 
+            if (authorId == null) return Unauthorized();
+ 
+            var newTopic = await _topicService.CreateTopicAsync(request, authorId, cancellationToken);
+ 
+            var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}/{newTopic.Id}";
+ 
+            var response = new
+            {
+                newTopic.Id,
+                newTopic.Title,
+                newTopic.Description,
+                newTopic.AuthorId,
+                newTopic.CreatedAt,
+                newTopic.Status,
+                newTopic.AllowComments,
+                newTopic.AnonymousVote,
+                Links = new object[]
+                {
+                    new { rel = "self", href = baseUrl },
+                    new { rel = "ideas", href = $"{baseUrl}/ideas" },
+                    new { rel = "update", href = baseUrl, method = "PUT" },
+                    new { rel = "delete", href = baseUrl, method = "DELETE" }
+                }
+            };
+ 
+            return CreatedAtAction(nameof(GetById), new { id = newTopic.Id }, response);
+        }
+ 
+        [HttpGet("{id}")]
+        [Authorize]
+        public async Task<IActionResult> GetById(string id, CancellationToken cancellationToken)
+        {
+            var topic = await _topicService.GetTopicByIdAsync(id, cancellationToken);
+ 
+            if (topic == null) return NotFound();
+ 
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? User.FindFirst("sub")?.Value;
+ 
+            var baseUrl = $"{Request.Scheme}://{Request.Host}/api/v1/topics/{topic.Id}";
+ 
+            var links = new List<object>
+            {
+                new { rel = "self", href = baseUrl },
+                new { rel = "ideas", href = $"{baseUrl}/ideas" },
+                new { rel = "author", href = $"{Request.Scheme}://{Request.Host}/api/v1/users/{topic.AuthorId}" }
+            };
+ 
+            if (userId == topic.AuthorId)
+            {
+                links.Add(new { rel = "update", href = baseUrl, method = "PUT" });
+                links.Add(new { rel = "delete", href = baseUrl, method = "DELETE" });
+            }
+ 
+            var response = new
+            {
+                topic.Id,
+                topic.Title,
+                topic.Description,
+                topic.AuthorId,
+                topic.CreatedAt,
+                topic.Status,
+                topic.AllowComments,
+                topic.AnonymousVote,
+                Links = links.ToArray()
+            };
+ 
+            return Ok(response);
+        }
+ 
+        [HttpPut("{id}")]
+        [Authorize]
+        public async Task<IActionResult> Update(string id, [FromBody] UpdateTopicRequest request, CancellationToken cancellationToken)
+        {
+            var requesterId = User.GetSubjectId();
+            var requesterRole = User.GetRole();
+ 
+            if (requesterId == null || string.IsNullOrWhiteSpace(requesterRole)) return Unauthorized();
+ 
+            var updated = await _topicService.UpdateTopicAsync(id, request, requesterId, requesterRole, cancellationToken);
+ 
+            var baseUrl = $"{Request.Scheme}://{Request.Host}/api/v1/topics/{updated.Id}";
+ 
+            var response = new
+            {
+                updated.Id,
+                updated.Title,
+                updated.Description,
+                updated.AuthorId,
+                updated.CreatedAt,
+                updated.UpdatedAt,
+                updated.Status,
+                updated.AllowComments,
+                updated.AnonymousVote,
+                Links = new object[]
+                {
+                    new { rel = "self", href = baseUrl },
+                    new { rel = "ideas", href = $"{baseUrl}/ideas" },
+                    new { rel = "author", href = $"{Request.Scheme}://{Request.Host}/api/v1/users/{updated.AuthorId}" }
+                }
+            };
+ 
+            return Ok(response);
+        }
+ 
+        [HttpDelete("{id}")]
+        [Authorize]
+        public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken)
+        {
+            var requesterId = User.GetSubjectId();
+            var requesterRole = User.GetRole();
+ 
+            if (requesterId == null || string.IsNullOrWhiteSpace(requesterRole)) return Unauthorized();
+ 
+            await _topicService.DeleteTopicAsync(id, requesterId, requesterRole, cancellationToken);
+            return NoContent();
+        }
+    }
+    
+}

@@ -5,6 +5,7 @@ using CIS.BusinessLogic.dtos;
 using CIS.BusinessLogic.Services;
 using CIS.Api.Extensions;
 using System.Threading;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace CIS.Api.Controllers
 {
@@ -61,24 +62,50 @@ namespace CIS.Api.Controllers
                 cancellationToken);
 
             var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
-            var links = new List<string>();
+            
+            string CreateResourceUri(int pageNumber)
+            {
+                var queryParams = new Dictionary<string, string?>
+                {
+                    ["page"] = pageNumber.ToString(),
+                    ["size"] = filter.Size.ToString()
+                };
+
+                if (!string.IsNullOrEmpty(filter.AuthorId)) queryParams["authorId"] = filter.AuthorId;
+                if (!string.IsNullOrEmpty(filter.CreatedFrom)) queryParams["createdFrom"] = filter.CreatedFrom;
+                if (!string.IsNullOrEmpty(filter.CreatedTo)) queryParams["createdTo"] = filter.CreatedTo;
+
+                var uri = QueryHelpers.AddQueryString(baseUrl, queryParams);
+
+                if (filter.Sort != null)
+                {
+                    foreach (var sort in filter.Sort)
+                    {
+                        uri = QueryHelpers.AddQueryString(uri, "sort", sort);
+                    }
+                }
+
+                return uri;
+            }
+
+            var links = new Dictionary<string, object>
+            {
+                ["self"] = new { href = CreateResourceUri(filter.Page) },
+                ["first"] = new { href = CreateResourceUri(0) },
+                ["last"] = new { href = CreateResourceUri(Math.Max(0, result.TotalPages - 1)) }
+            };
 
             if (filter.Page > 0)
             {
-                links.Add($"<{baseUrl}?page=0&size={filter.Size}>; rel=\"first\"");
-                links.Add($"<{baseUrl}?page={filter.Page - 1}&size={filter.Size}>; rel=\"prev\"");
+                links["prev"] = new { href = CreateResourceUri(filter.Page - 1) };
             }
 
             if (filter.Page < result.TotalPages - 1)
             {
-                links.Add($"<{baseUrl}?page={filter.Page + 1}&size={filter.Size}>; rel=\"next\"");
-                links.Add($"<{baseUrl}?page={result.TotalPages - 1}&size={filter.Size}>; rel=\"last\"");
+                links["next"] = new { href = CreateResourceUri(filter.Page + 1) };
             }
 
-            if (links.Any())
-            {
-                Response.Headers.Append("Link", string.Join(", ", links));
-            }
+            result.Links = links;
 
             return Ok(result);
         }

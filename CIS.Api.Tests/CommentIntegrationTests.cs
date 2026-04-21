@@ -14,7 +14,6 @@ namespace CIS.Api.Tests;
 public class CommentIntegrationTests : IClassFixture<CisApiFactory>
 {
     private const string TestJwtSecret = "your-super-secret-key-minimum-256-bits-long";
-
     private readonly CisApiFactory _factory;
 
     public CommentIntegrationTests(CisApiFactory factory)
@@ -73,16 +72,19 @@ public class CommentIntegrationTests : IClassFixture<CisApiFactory>
 
         var topic = new Topic
         {
-            Title = Guid.NewGuid().ToString(),
+            Id = Guid.NewGuid().ToString(),
+            Title = "Topic " + Guid.NewGuid().ToString().Substring(0, 8),
             Description = "seed topic",
             AuthorId = "author-1",
             Type = CIS.BusinessLogic.Domain.TopicType.other,
             Status = CIS.BusinessLogic.Domain.TopicStatus.active,
-            AllowComments = allowComments
+            AllowComments = allowComments,
+            VoteType = "single"
         };
 
         var idea = new Idea
         {
+            Id = Guid.NewGuid().ToString(),
             Title = "seed idea",
             Description = "seed description",
             TopicId = topic.Id,

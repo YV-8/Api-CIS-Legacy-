@@ -3,6 +3,7 @@ using CIS.BusinessLogic.Persistence;
 using CIS.DataAcces.Data;
 using CIS.DataAcces.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace CIS.DataAcces.Repositories;
 
@@ -36,7 +37,13 @@ public class VoteRepository : IVoteRepository
                 throw new ConflictException("User has already voted on this idea.");
         }
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        // Verificamos si el proveedor soporta transacciones (InMemory no las soporta)
+        IDbContextTransaction? transaction = null;
+        if (_context.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        }
+
         try
         {
             var vote = new Vote
@@ -50,7 +57,11 @@ public class VoteRepository : IVoteRepository
             idea.VoteCount += 1;
 
             await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+
+            if (transaction != null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
 
             return new VoteCreationResult
             {
@@ -63,8 +74,18 @@ public class VoteRepository : IVoteRepository
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken);
+            if (transaction != null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
             throw;
+        }
+        finally
+        {
+            if (transaction != null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
     }
 
@@ -88,19 +109,38 @@ public class VoteRepository : IVoteRepository
         if (vote == null)
             throw new NotFoundException("Vote not found for this user on this idea.");
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        IDbContextTransaction? transaction = null;
+        if (_context.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        }
+
         try
         {
             _context.Votes.Remove(vote);
             idea.VoteCount = Math.Max(0, idea.VoteCount - 1);
 
             await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+
+            if (transaction != null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken);
+            if (transaction != null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
             throw;
+        }
+        finally
+        {
+            if (transaction != null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
     }
 }

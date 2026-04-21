@@ -92,7 +92,7 @@ namespace CIS.Api.Controllers
             {
                 ["self"] = new { href = CreateResourceUri(filter.Page) },
                 ["first"] = new { href = CreateResourceUri(0) },
-                ["last"] = new { href = CreateResourceUri(result.TotalPages - 1) }
+                ["last"] = new { href = CreateResourceUri(Math.Max(0, result.TotalPages - 1)) }
             };
 
             if (filter.Page > 0)

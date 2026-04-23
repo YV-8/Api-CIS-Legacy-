@@ -338,6 +338,10 @@ paket-files/
 __pycache__/
 *.pyc
 
+# Python virtual environment (seed script)
+.venv/
+seed/.venv/
+
 # Cake - Uncomment if you are using it
 # tools/**
 # !tools/packages.config

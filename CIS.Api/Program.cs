@@ -114,7 +114,7 @@ else
         options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 }
 
-builder.Services.AddCisPersistence();
+builder.Services.AddCisPersistence(builder.Configuration);
 
 builder.Services.AddScoped<ITopicService, TopicService>();
 builder.Services.AddScoped<IIdeaService, IdeaService>();

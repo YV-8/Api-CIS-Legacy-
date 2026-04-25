@@ -15,6 +15,11 @@ public class MongoDbContext
         var client = new MongoClient(connectionString);
         _database = client.GetDatabase(databaseName);
     }
+    public MongoDbContext(string connectionString, string databaseName)
+    {
+        var client = new MongoClient(connectionString);
+        _database  = client.GetDatabase(databaseName);
+    }
 
     public IMongoCollection<T> GetCollection<T>(string collectionName)
         => _database.GetCollection<T>(collectionName);

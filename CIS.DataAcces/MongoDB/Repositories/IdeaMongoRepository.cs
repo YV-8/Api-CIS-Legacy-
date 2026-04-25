@@ -5,7 +5,7 @@ using CIS.DataAcces.Data;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 
-namespace CIS.DataAcces.Repositories;
+namespace CIS.DataAcces.MongoDB.Repositories;
 
 public class IdeaMongoRepository : IIdeaRepository
 {

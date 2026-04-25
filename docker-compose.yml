@@ -19,19 +19,44 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo:
+    image: mongo:7
+    container_name: sd3_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: sd3
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     container_name: user_management_ms
     restart: always
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
+      SERVER_PORT: 8081
+      # Switch database engine: mysql | mongodb
+      SPRING_PROFILES_ACTIVE: mysql
+      # MySQL credentials (used when SPRING_PROFILES_ACTIVE=mysql)
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/sd3
       SPRING_DATASOURCE_USERNAME: SOME_USER
       SPRING_DATASOURCE_PASSWORD: SOME_PASSWORD
+      # MongoDB URI (used when SPRING_PROFILES_ACTIVE=mongodb)
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/sd3
     depends_on:
       db:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
 
 volumes:
   mysql_data:
+  mongo_data:

@@ -9,8 +9,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: sd3
-      MYSQL_USER: SOME_USER
-      MYSQL_PASSWORD: SOME_PASSWORD
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -47,10 +47,10 @@ services:
       SPRING_PROFILES_ACTIVE: mysql
       # MySQL credentials (used when SPRING_PROFILES_ACTIVE=mysql)
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/sd3
-      SPRING_DATASOURCE_USERNAME: SOME_USER
-      SPRING_DATASOURCE_PASSWORD: SOME_PASSWORD
+      SPRING_DATASOURCE_USERNAME: test_user
+      SPRING_DATASOURCE_PASSWORD: 6vHlYFWYFzacS8lC
       # MongoDB URI (used when SPRING_PROFILES_ACTIVE=mongodb)
-      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/sd3
+      MONGODB_URI: mongodb+srv://test_user:6vHlYFWYFzacS8lC@db-cis.wihvwjy.mongodb.net/sd3?appName=DB-CIS
     depends_on:
       db:
         condition: service_healthy

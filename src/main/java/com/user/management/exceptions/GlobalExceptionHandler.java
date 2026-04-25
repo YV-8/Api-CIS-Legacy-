@@ -52,6 +52,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflicException(Exception ex) {
+        ex.printStackTrace();
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+    
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String message) {
         ErrorResponse body = new ErrorResponse(
                 status.value(),

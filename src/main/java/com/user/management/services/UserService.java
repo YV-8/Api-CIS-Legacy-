@@ -15,6 +15,7 @@ import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
 import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.enums.Role;
+import com.user.management.exceptions.ConflictException;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.models.User;
 import com.user.management.repository.UserRepositoryPort;
@@ -30,6 +31,10 @@ public class UserService implements UserDetailsService {
     private final PasswordEncoder passwordEncoder;
 
     public UserResponseDTO saveUser(UserRequestDTO user) {
+        if (userRepository.existsByLogin(user.getLogin())) {
+            throw new ConflictException("Confic user duplicate by: "+user.getLogin());
+        }
+        
         User userEntity = modelMapper.map(user, User.class);
         userEntity.setRole(Role.valueOf(user.getRole().toUpperCase()));
         userEntity.setPassword(passwordEncoder.encode(user.getPassword()));

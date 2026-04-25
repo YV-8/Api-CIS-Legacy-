@@ -11,7 +11,7 @@ import com.user.management.dtos.LoginRequestDTO;
 import com.user.management.dtos.LoginResponseDTO;
 import com.user.management.exceptions.UnauthorizedException;
 import com.user.management.models.User;
-import com.user.management.repository.UserRepository;
+import com.user.management.repository.UserRepositoryPort;
 import com.user.management.utils.JwtUtil;
 
 @Service
@@ -24,7 +24,7 @@ public class AuthService {
     private AuthenticationManager authManager;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserRepositoryPort userRepository;
 
     @Value("${jwt.expiration}")
     private long expiration;

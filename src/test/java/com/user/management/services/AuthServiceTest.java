@@ -22,7 +22,7 @@ import com.user.management.dtos.LoginResponseDTO;
 import com.user.management.enums.Role;
 import com.user.management.exceptions.UnauthorizedException;
 import com.user.management.models.User;
-import com.user.management.repository.UserRepository;
+import com.user.management.repository.UserRepositoryPort;
 import com.user.management.utils.JwtUtil;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,7 +35,7 @@ class AuthServiceTest {
     private JwtUtil jwtUtil;
 
     @Mock
-    private UserRepository userRepository;
+    private UserRepositoryPort userRepository;
 
     @InjectMocks
     private AuthService authService;

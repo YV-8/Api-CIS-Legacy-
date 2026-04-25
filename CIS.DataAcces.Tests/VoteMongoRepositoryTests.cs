@@ -22,13 +22,13 @@ public class VoteMongoRepositoryTests : IDisposable
 
     private VoteMongoRepository Repo() => new(_context);
 
-    private async Task<Guid> SeedIdea()
+    private async Task<string> SeedIdea()
     {
-        var id  = Guid.NewGuid();
+        var id  = Guid.NewGuid().ToString();
         var col = _context.GetCollection<IdeaDocument>("ideas");
         await col.InsertOneAsync(new IdeaDocument
         {
-            Id = id, TopicId = Guid.NewGuid(),
+            Id = id, TopicId = Guid.NewGuid().ToString(),
             Title = "Idea", AuthorId = "u1",
             VoteCount = 0,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow

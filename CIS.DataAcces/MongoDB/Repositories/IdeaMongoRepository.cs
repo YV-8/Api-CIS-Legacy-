@@ -9,29 +9,29 @@ namespace CIS.DataAcces.MongoDB.Repositories;
 
 public class IdeaMongoRepository : IIdeaRepository
 {
-    private readonly IMongoCollection<IdeaDocument> _context;
+    private readonly IMongoCollection<IdeaDocument> _ideas;
 
     public IdeaMongoRepository(MongoDbContext context)
     {
-        _context = context.GetCollection<IdeaDocument>("ideas");
+        _ideas = context.GetCollection<IdeaDocument>("ideas");
     }
 
     public async Task<IdeaDetails> InsertAsync(IdeaInsertData d, CancellationToken cancellationToken = default)
     {
         var ideaDoc = new IdeaDocument
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.NewGuid().ToString(),
             Title = d.Title,
             Description = d.Description,
-            TopicId = Guid.TryParse(d.TopicId, out var tId) ? tId : Guid.Empty,
+            TopicId = d.TopicId,
             AuthorId = d.AuthorId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
             DeletedAt = null
         };
 
-        await _context.InsertOneAsync(ideaDoc, cancellationToken: cancellationToken);
-        return MapToDetails(ideaDoc);
+        await _ideas.InsertOneAsync(ideaDoc, cancellationToken: cancellationToken);
+        return MapToDomain(ideaDoc);
     }
 
     public async Task<(IReadOnlyList<IdeaDetails> Items, int TotalElements)> GetPagedForTopicAsync(
@@ -44,21 +44,22 @@ public class IdeaMongoRepository : IIdeaRepository
     {
         var filterBuilder = Builders<IdeaDocument>.Filter;
         Guid.TryParse(topicId, out var gTopicId);
-        var filter = filterBuilder.Eq(i => i.TopicId, gTopicId) & 
+        var filter = filterBuilder.Eq(i => i.TopicId, topicId) & 
                      filterBuilder.Eq(i => i.DeletedAt, null);
 
         if (!string.IsNullOrWhiteSpace(authorId))
             filter &= filterBuilder.Eq(i => i.AuthorId, authorId);
 
-        var totalElements = await _context.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
+        var total = (int)await _ideas.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
 
-        var docs = await _context.Find(filter)
-            .SortByDescending(i => i.CreatedAt)
+        var items = await _ideas
+            .Find(filter)
+            .Sort(BuildSort(sort))
             .Skip(page * size)
             .Limit(size)
             .ToListAsync(cancellationToken);
 
-        return (docs.Select(MapToDetails).ToList(), (int)totalElements);
+        return (items.Select(MapToDomain).ToList(), total);
     }
 
     public async Task<IdeaDetails?> FindInTopicReadAsync(string topicId, string ideaId, CancellationToken cancellationToken = default)
@@ -67,38 +68,43 @@ public class IdeaMongoRepository : IIdeaRepository
             return null;
 
         var filter = Builders<IdeaDocument>.Filter.And(
-            Builders<IdeaDocument>.Filter.Eq(i => i.Id, gIdeaId),
-            Builders<IdeaDocument>.Filter.Eq(i => i.TopicId, gTopicId),
+            Builders<IdeaDocument>.Filter.Eq(i => i.Id, ideaId),
+            Builders<IdeaDocument>.Filter.Eq(i => i.TopicId, topicId),
             Builders<IdeaDocument>.Filter.Eq(i => i.DeletedAt, null)
         );
 
-        var doc = await _context.Find(filter).FirstOrDefaultAsync(cancellationToken);
-        return doc == null ? null : MapToDetails(doc);
+        var doc = await _ideas.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        return doc == null ? null : MapToDomain(doc);
     }
 
-    public async Task<IdeaDetails?> TryUpdateAsync(string topicId, string ideaId, UpdateIdeaRequest request, CancellationToken cancellationToken = default)
+    public async Task<IdeaDetails?> TryUpdateAsync( string topicId, string ideaId,UpdateIdeaRequest request,CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(ideaId, out var gIdeaId) || !Guid.TryParse(topicId, out var gTopicId))
-            return null;
-
         var filter = Builders<IdeaDocument>.Filter.And(
-            Builders<IdeaDocument>.Filter.Eq(i => i.Id, gIdeaId),
-            Builders<IdeaDocument>.Filter.Eq(i => i.TopicId, gTopicId),
+            Builders<IdeaDocument>.Filter.Eq(i => i.Id, ideaId),
+            Builders<IdeaDocument>.Filter.Eq(i => i.TopicId, topicId),
             Builders<IdeaDocument>.Filter.Eq(i => i.DeletedAt, null)
         );
 
-        var update = Builders<IdeaDocument>.Update
-            .Set(i => i.Title, request.Title)
-            .Set(i => i.Description, request.Description)
-            .Set(i => i.UpdatedAt, DateTime.UtcNow);
+        var updates = new List<UpdateDefinition<IdeaDocument>>();
 
-        var result = await _context.FindOneAndUpdateAsync(
-            filter, 
-            update, 
-            new FindOneAndUpdateOptions<IdeaDocument> { ReturnDocument = ReturnDocument.After },
-            cancellationToken);
-        
-        return result == null ? null : MapToDetails(result);
+        if (!string.IsNullOrEmpty(request.Title))
+            updates.Add(Builders<IdeaDocument>.Update.Set(i => i.Title, request.Title));
+        if (!string.IsNullOrEmpty(request.Description))
+            updates.Add(Builders<IdeaDocument>.Update.Set(i => i.Description, request.Description));
+
+        updates.Add(Builders<IdeaDocument>.Update.Set(i => i.UpdatedAt, DateTime.UtcNow));
+
+        var opts = new FindOneAndUpdateOptions<IdeaDocument>
+        {
+            ReturnDocument = ReturnDocument.After
+        };
+
+        var updated = await _ideas.FindOneAndUpdateAsync(
+            filter,
+            Builders<IdeaDocument>.Update.Combine(updates),
+            opts, cancellationToken);
+
+        return updated is null ? null : MapToDomain(updated);
     }
 
     public async Task<bool> TrySoftDeleteAsync(string topicId, string ideaId, CancellationToken cancellationToken = default)
@@ -107,8 +113,8 @@ public class IdeaMongoRepository : IIdeaRepository
             return false;
 
         var filter = Builders<IdeaDocument>.Filter.And(
-            Builders<IdeaDocument>.Filter.Eq(i => i.Id, gIdeaId),
-            Builders<IdeaDocument>.Filter.Eq(i => i.TopicId, gTopicId),
+            Builders<IdeaDocument>.Filter.Eq(i => i.Id, ideaId),
+            Builders<IdeaDocument>.Filter.Eq(i => i.TopicId, topicId),
             Builders<IdeaDocument>.Filter.Eq(i => i.DeletedAt, null)
         );
 
@@ -116,15 +122,39 @@ public class IdeaMongoRepository : IIdeaRepository
             .Set(i => i.DeletedAt, DateTime.UtcNow)
             .Set(i => i.UpdatedAt, DateTime.UtcNow);
         
-        var result = await _context.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
+        var result = await _ideas.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
         
         return result.ModifiedCount > 0;
     }
-
-    private static IdeaDetails MapToDetails(IdeaDocument doc) => new()
+    private static SortDefinition<IdeaDocument> BuildSort(string[]? sort)
     {
-        Id = doc.Id.ToString(),
-        TopicId = doc.TopicId.ToString(),
+        if (sort is null || sort.Length == 0)
+            return Builders<IdeaDocument>.Sort.Descending(i => i.CreatedAt);
+
+        var defs = sort.Select(s =>
+        {
+            var parts = s.Split(',');
+            var field = parts[0].Trim();
+            var desc  = parts.Length > 1 && parts[1].Trim().ToLower() == "desc";
+
+            return field switch
+            {
+                "voteCount" => desc
+                    ? Builders<IdeaDocument>.Sort.Descending(i => i.VoteCount)
+                    : Builders<IdeaDocument>.Sort.Ascending(i => i.VoteCount),
+                _ => desc
+                    ? Builders<IdeaDocument>.Sort.Descending(i => i.CreatedAt)
+                    : Builders<IdeaDocument>.Sort.Ascending(i => i.CreatedAt)
+            };
+        });
+
+        return Builders<IdeaDocument>.Sort.Combine(defs);
+    }
+
+    private static IdeaDetails MapToDomain(IdeaDocument doc) => new()
+    {
+        Id = doc.Id,
+        TopicId = doc.TopicId,
         Title = doc.Title,
         Description = doc.Description,
         AuthorId = doc.AuthorId,

@@ -1,7 +1,6 @@
 using CIS.BusinessLogic.Domain;
 using CIS.BusinessLogic.Persistence;
 using CIS.DataAcces.Data;
-using CIS.DataAcces.MongoDB.Documents;
 using MongoDB.Driver;
 
 namespace CIS.DataAcces.MongoDB.Repositories;
@@ -21,8 +20,8 @@ public class CommentMongoRepository : ICommentRepository
     {
         var doc = new CommentDocument
         {
-            Id        = Guid.NewGuid(),
-            IdeaId    = Guid.Parse(data.IdeaId),
+            Id        = Guid.NewGuid().ToString(),
+            IdeaId    = data.IdeaId,
             Content   = data.Content,
             UserId    = data.UserId,
             CreatedAt = DateTime.UtcNow,
@@ -40,24 +39,19 @@ public class CommentMongoRepository : ICommentRepository
         string[]? sort,
         CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(ideaId, out var gIdeaId))
-            return ([], 0);
+        var filter = Builders<CommentDocument>.Filter.Eq(c => c.IdeaId, ideaId);
 
-        var filter = Builders<CommentDocument>.Filter.Eq(c => c.IdeaId, gIdeaId);
-
-        var totalElements = (int)await _comments
+        var total = (int)await _comments
             .CountDocumentsAsync(filter, cancellationToken: cancellationToken);
-
-        var sortDef = BuildSort(sort);
 
         var items = await _comments
             .Find(filter)
-            .Sort(sortDef)
-            .Skip((page - 1) * size)
+            .Sort(BuildSort(sort))
+            .Skip(page * size)
             .Limit(size)
             .ToListAsync(cancellationToken);
 
-        return (items.Select(MapToDomain).ToList(), totalElements);
+        return (items.Select(MapToDomain).ToList(), total);
     }
 
     private static SortDefinition<CommentDocument> BuildSort(string[]? sort)
@@ -65,31 +59,22 @@ public class CommentMongoRepository : ICommentRepository
         if (sort is null || sort.Length == 0)
             return Builders<CommentDocument>.Sort.Descending(c => c.CreatedAt);
 
-        var sortBuilder = Builders<CommentDocument>.Sort;
-        var defs = new List<SortDefinition<CommentDocument>>();
-
-        foreach (var s in sort)
+        var defs = sort.Select(s =>
         {
             var parts = s.Split(',');
-            var field = parts[0].Trim();
-            var dir   = parts.Length > 1 ? parts[1].Trim().ToLower() : "asc";
+            var desc  = parts.Length > 1 && parts[1].Trim().ToLower() == "desc";
+            return desc
+                ? Builders<CommentDocument>.Sort.Descending(c => c.CreatedAt)
+                : Builders<CommentDocument>.Sort.Ascending(c => c.CreatedAt);
+        });
 
-            defs.Add(field switch
-            {
-                "createdAt" => dir == "desc"
-                    ? sortBuilder.Descending(c => c.CreatedAt)
-                    : sortBuilder.Ascending(c => c.CreatedAt),
-                _ => sortBuilder.Descending(c => c.CreatedAt)
-            });
-        }
-
-        return sortBuilder.Combine(defs);
+        return Builders<CommentDocument>.Sort.Combine(defs);
     }
 
     private static CommentDetails MapToDomain(CommentDocument d) => new()
     {
-        Id        = d.Id.ToString(),
-        IdeaId    = d.IdeaId.ToString(),
+        Id        = d.Id,
+        IdeaId    = d.IdeaId,
         Content   = d.Content,
         UserId    = d.UserId,
         CreatedAt = d.CreatedAt,

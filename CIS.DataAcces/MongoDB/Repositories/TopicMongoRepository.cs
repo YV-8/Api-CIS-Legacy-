@@ -20,13 +20,14 @@ public class TopicMongoRepository : ITopicRepository
     {
         var doc = new TopicDocument
         {
-            Id = Guid.NewGuid(), // O convertir string a Guid si es necesario
+            Id = Guid.NewGuid().ToString(),
             Title = request.Title,
             Description = request.Description,
             CreatedBy = authorId,
             Status = TopicStatus.draft.ToString(),
             Type = TopicType.other.ToString(),
             CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
             DeletedAt = null
         };
 
@@ -34,7 +35,6 @@ public class TopicMongoRepository : ITopicRepository
         return MapToDomain(doc);
     }
 
-    // CUMPLE CON: GetPagedAsync
     public async Task<(IReadOnlyList<TopicDetails> Items, int TotalElements)> GetPagedAsync(
         int page, int size, string? authorId, DateTime? createdFrom, DateTime? createdTo, string[]? sort, CancellationToken cancellationToken = default)
     {
@@ -43,11 +43,15 @@ public class TopicMongoRepository : ITopicRepository
 
         if (!string.IsNullOrEmpty(authorId))
             filter &= filterBuilder.Eq(t => t.CreatedBy, authorId);
-
-        // ... Agregar filtros de fecha (createdFrom/To) aquí ...
+        if (createdFrom.HasValue)
+            filter &= filterBuilder.Gte(t => t.CreatedAt, createdFrom.Value);
+        if (createdTo.HasValue)
+            filter &= filterBuilder.Lte(t => t.CreatedAt, createdTo.Value);
 
         var total = await _collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
-        var docs = await _collection.Find(filter)
+        var docs = await _collection
+            .Find(filter)
+            .Sort(BuildSort(sort))
             .Skip(page * size)
             .Limit(size)
             .ToListAsync(cancellationToken);
@@ -55,55 +59,98 @@ public class TopicMongoRepository : ITopicRepository
         return (docs.Select(MapToDomain).ToList(), (int)total);
     }
 
-    // CUMPLE CON: FindActiveByIdAsync
-    public async Task<TopicDetails?> FindActiveByIdAsync(string id, CancellationToken cancellationToken = default)
+    public async Task<TopicDetails?> FindActiveByIdAsync(
+        string id,
+        CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(id, out var guidId)) return null;
-        
+        // ← fix: string directo, sin Guid.TryParse
         var doc = await _collection
-            .Find(t => t.Id == guidId && t.DeletedAt == null)
+            .Find(t => t.Id == id && t.DeletedAt == null)
             .FirstOrDefaultAsync(cancellationToken);
 
         return doc is null ? null : MapToDomain(doc);
     }
 
-    // CUMPLE CON: ExistsActiveAsync
-    public async Task<bool> ExistsActiveAsync(string topicId, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsActiveAsync(
+        string topicId,
+        CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(topicId, out var guidId)) return false;
-        return await _collection.Find(t => t.Id == guidId && t.DeletedAt == null).AnyAsync(cancellationToken);
+        // ← fix: string directo
+        return await _collection
+            .Find(t => t.Id == topicId && t.DeletedAt == null)
+            .AnyAsync(cancellationToken);
     }
 
-    // CUMPLE CON: TryUpdateAsync
-    public async Task<TopicDetails?> TryUpdateAsync(string id, UpdateTopicRequest request, CancellationToken cancellationToken = default)
+    public async Task<TopicDetails?> TryUpdateAsync(
+        string id,
+        UpdateTopicRequest request,
+        CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(id, out var guidId)) return null;
+        var filter = Builders<TopicDocument>.Filter.And(
+            Builders<TopicDocument>.Filter.Eq(t => t.Id, id),
+            Builders<TopicDocument>.Filter.Eq(t => t.DeletedAt, null)
+        );
 
-        var filter = Builders<TopicDocument>.Filter.Eq(t => t.Id, guidId);
         var update = Builders<TopicDocument>.Update
             .Set(t => t.Title, request.Title)
             .Set(t => t.Description, request.Description)
             .Set(t => t.UpdatedAt, DateTime.UtcNow);
 
-        var result = await _collection.FindOneAndUpdateAsync(filter, update, cancellationToken: cancellationToken);
-        return result == null ? null : await FindActiveByIdAsync(id, cancellationToken);
+        // ← fix: ReturnDocument.After — una sola query, no dos
+        var opts = new FindOneAndUpdateOptions<TopicDocument>
+        {
+            ReturnDocument = ReturnDocument.After
+        };
+
+        var doc = await _collection.FindOneAndUpdateAsync(filter, update, opts, cancellationToken);
+        return doc is null ? null : MapToDomain(doc);
     }
 
-    // CUMPLE CON: TrySoftDeleteAsync
-    public async Task<bool> TrySoftDeleteAsync(string id, CancellationToken cancellationToken = default)
+    public async Task<bool> TrySoftDeleteAsync(
+        string id,
+        CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(id, out var guidId)) return false;
+        // ← fix: string directo
+        var update = Builders<TopicDocument>.Update
+            .Set(t => t.DeletedAt, DateTime.UtcNow)
+            .Set(t => t.UpdatedAt, DateTime.UtcNow);
 
-        var update = Builders<TopicDocument>.Update.Set(t => t.DeletedAt, DateTime.UtcNow);
-        var result = await _collection.UpdateOneAsync(t => t.Id == guidId, update, cancellationToken: cancellationToken);
-        
+        var result = await _collection.UpdateOneAsync(
+            t => t.Id == id && t.DeletedAt == null,
+            update,
+            cancellationToken: cancellationToken);
+
         return result.ModifiedCount > 0;
     }
 
-    // ─── Mappers ───────────────────────────────────────
+    private static SortDefinition<TopicDocument> BuildSort(string[]? sort)
+    {
+        if (sort is null || sort.Length == 0)
+            return Builders<TopicDocument>.Sort.Descending(t => t.CreatedAt);
+
+        var defs = sort.Select(s =>
+        {
+            var parts = s.Split(',');
+            var field = parts[0].Trim();
+            var desc  = parts.Length > 1 && parts[1].Trim().ToLower() == "desc";
+
+            return field switch
+            {
+                "title"     => desc
+                    ? Builders<TopicDocument>.Sort.Descending(t => t.Title)
+                    : Builders<TopicDocument>.Sort.Ascending(t => t.Title),
+                "createdAt" => desc
+                    ? Builders<TopicDocument>.Sort.Descending(t => t.CreatedAt)
+                    : Builders<TopicDocument>.Sort.Ascending(t => t.CreatedAt),
+                _ => Builders<TopicDocument>.Sort.Descending(t => t.CreatedAt)
+            };
+        });
+
+        return Builders<TopicDocument>.Sort.Combine(defs);
+    }
     private static TopicDetails MapToDomain(TopicDocument d) => new()
     {
-        Id = d.Id.ToString(),
+        Id = d.Id,
         Title = d.Title,
         Description = d.Description,
         AuthorId = d.CreatedBy,
@@ -112,18 +159,5 @@ public class TopicMongoRepository : ITopicRepository
         CreatedAt = d.CreatedAt,
         UpdatedAt = d.UpdatedAt ?? d.CreatedAt,
         DeletedAt = d.DeletedAt
-    };
-
-    private static TopicDocument MapToDocument(TopicDetails t) => new()
-    {
-        Id = Guid.TryParse(t.Id, out var guid) ? guid : Guid.NewGuid(),
-        Title = t.Title,
-        Description = t.Description,
-        Status = t.Status.ToString(),
-        Type = t.Type.ToString(),
-        CreatedBy = t.AuthorId,
-        CreatedAt = t.CreatedAt,
-        UpdatedAt = t.UpdatedAt,
-        DeletedAt = t.DeletedAt
     };
 }

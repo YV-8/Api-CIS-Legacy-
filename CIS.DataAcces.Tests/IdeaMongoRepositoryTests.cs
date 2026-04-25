@@ -22,7 +22,6 @@ public class IdeaMongoRepositoryTests : IDisposable
 
     public void Dispose() => _runner.Dispose();
 
-    // ── helpers ────────────────────────────────────────────────
     private IdeaMongoRepository Repo() => new(_context);
 
     private async Task SeedIdea(IdeaDocument doc)
@@ -51,14 +50,14 @@ public class IdeaMongoRepositoryTests : IDisposable
 
         await SeedIdea(new IdeaDocument
         {
-            Id = Guid.NewGuid(), TopicId = topicId,
+            Id = Guid.NewGuid().ToString(), TopicId = topicId,
             Title = "Activa", AuthorId = "u1",
             DeletedAt = null,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
         await SeedIdea(new IdeaDocument
         {
-            Id = Guid.NewGuid(), TopicId = topicId,
+            Id = Guid.NewGuid().ToString(), TopicId = topicId,
             Title = "Borrada", AuthorId = "u1",
             DeletedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
@@ -78,13 +77,13 @@ public class IdeaMongoRepositoryTests : IDisposable
 
         await SeedIdea(new IdeaDocument
         {
-            Id = Guid.NewGuid(), TopicId = topicId,
+            Id = Guid.NewGuid().ToString(), TopicId = topicId,
             Title = "De Ana", AuthorId = "ana",
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
         await SeedIdea(new IdeaDocument
         {
-            Id = Guid.NewGuid(), TopicId = topicId,
+            Id = Guid.NewGuid().ToString(), TopicId = topicId,
             Title = "De Bob", AuthorId = "bob",
             CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
         });
@@ -100,7 +99,7 @@ public class IdeaMongoRepositoryTests : IDisposable
     public async Task FindInTopicReadAsync_ReturnsNull_IfIdeaIsDeleted()
     {
         var topicId = Guid.NewGuid();
-        var ideaId  = Guid.NewGuid();
+        var ideaId  = Guid.NewGuid().ToString();
 
         await SeedIdea(new IdeaDocument
         {

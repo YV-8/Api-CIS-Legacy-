@@ -26,7 +26,7 @@ public class VoteMongoRepository : IVoteRepository
 
         // Verificar que la idea existe
         var idea = await _ideas
-            .Find(i => i.Id == gIdeaId && i.DeletedAt == null)
+            .Find(i => i.Id == ideaId && i.DeletedAt == null)
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException($"Idea {ideaId} not found");
 
@@ -36,24 +36,22 @@ public class VoteMongoRepository : IVoteRepository
         // Registrar el voto
         var voteDoc = new VoteDocument
         {
-            Id        = Guid.NewGuid(),
-            IdeaId    = gIdeaId,
+            Id        = Guid.NewGuid().ToString(),
+            IdeaId    = ideaId,
             UserId    = userId,
             CreatedAt = DateTime.UtcNow
         };
 
         await _votes.InsertOneAsync(voteDoc, cancellationToken: cancellationToken);
 
-        // Incrementar contador en la idea
-        var update = Builders<IdeaDocument>.Update.Inc(i => i.VoteCount, 1);
         await _ideas.UpdateOneAsync(
-            i => i.Id == gIdeaId, update,
+            i => i.Id == ideaId,
+            Builders<IdeaDocument>.Update.Inc(i => i.VoteCount, 1),
             cancellationToken: cancellationToken);
 
-        // Retornar VoteCreationResult con sus propiedades reales
         return new VoteCreationResult
         {
-            VoteId    = voteDoc.Id.ToString(),
+            VoteId    = voteDoc.Id,
             IdeaId    = ideaId,
             UserId    = userId,
             TopicId   = topicId,
@@ -61,7 +59,7 @@ public class VoteMongoRepository : IVoteRepository
         };
     }
 
-    public async Task RemoveVoteAsync(           // ← Task, no Task<bool>
+    public async Task RemoveVoteAsync(
         string ideaId,
         string userId,
         CancellationToken cancellationToken = default)
@@ -70,7 +68,7 @@ public class VoteMongoRepository : IVoteRepository
             throw new ArgumentException($"Invalid ideaId: {ideaId}");
 
         var filter = Builders<VoteDocument>.Filter.And(
-            Builders<VoteDocument>.Filter.Eq(v => v.IdeaId, gIdeaId),
+            Builders<VoteDocument>.Filter.Eq(v => v.IdeaId, ideaId),
             Builders<VoteDocument>.Filter.Eq(v => v.UserId, userId)
         );
 
@@ -78,9 +76,9 @@ public class VoteMongoRepository : IVoteRepository
 
         if (result.DeletedCount > 0)
         {
-            var update = Builders<IdeaDocument>.Update.Inc(i => i.VoteCount, -1);
             await _ideas.UpdateOneAsync(
-                i => i.Id == gIdeaId, update,
+                i => i.Id == ideaId,
+                Builders<IdeaDocument>.Update.Inc(i => i.VoteCount, -1),
                 cancellationToken: cancellationToken);
         }
     }
@@ -90,10 +88,9 @@ public class VoteMongoRepository : IVoteRepository
         string userId,
         CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(ideaId, out var gIdeaId)) return false;
 
         var filter = Builders<VoteDocument>.Filter.And(
-            Builders<VoteDocument>.Filter.Eq(v => v.IdeaId, gIdeaId),
+            Builders<VoteDocument>.Filter.Eq(v => v.IdeaId, ideaId),
             Builders<VoteDocument>.Filter.Eq(v => v.UserId, userId)
         );
 

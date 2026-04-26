@@ -1,6 +1,7 @@
 package com.user.management.repository.mongo;
 
 import com.user.management.models.User;
+import com.user.management.models.UserDocument;
 import com.user.management.repository.UserRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;

@@ -1,4 +1,4 @@
-package com.user.management.repository.mongo;
+package com.user.management.models;
 
 import com.user.management.enums.Role;
 import lombok.AllArgsConstructor;

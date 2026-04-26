@@ -1,5 +1,6 @@
 package com.user.management.repository.mongo;
 
+import com.user.management.models.UserDocument;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 

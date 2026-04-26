@@ -7,10 +7,10 @@ services:
     ports:
       - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: sd3
-      MYSQL_USER: test_user
-      MYSQL_PASSWORD: test_password
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -26,7 +26,7 @@ services:
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: sd3
+      MONGO_INITDB_DATABASE: ${DB_NAME}
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -40,21 +40,22 @@ services:
     container_name: user_management_ms
     restart: always
     ports:
-      - "8081:8081"
+      - "${SERVER_PORT}:${SERVER_PORT}"
     environment:
-      SERVER_PORT: 8081
+      SERVER_PORT: ${SERVER_PORT}
       # Switch database engine: mysql | mongodb
-      SPRING_PROFILES_ACTIVE: mysql
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       # MySQL credentials (used when SPRING_PROFILES_ACTIVE=mysql)
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/sd3
-      SPRING_DATASOURCE_USERNAME: test_user
-      SPRING_DATASOURCE_PASSWORD: 6vHlYFWYFzacS8lC
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       # MongoDB URI (used when SPRING_PROFILES_ACTIVE=mongodb)
-      MONGODB_URI: mongodb+srv://test_user:6vHlYFWYFzacS8lC@db-cis.wihvwjy.mongodb.net/sd3?appName=DB-CIS
+      MONGODB_URI: ${MONGODB_URI}
+    # Only depends on MySQL by default (SPRING_PROFILES_ACTIVE=mysql).
+    # When switching to the "mongodb" profile, start mongo first:
+    #   docker compose up mongo -d && docker compose up app
     depends_on:
       db:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
 
 volumes:

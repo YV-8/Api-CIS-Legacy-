@@ -4,22 +4,21 @@ import java.util.List;
 import java.util.Optional;
 
 import org.modelmapper.ModelMapper;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.user.management.dtos.UserRequestDTO;
 import com.user.management.dtos.UserResponseDTO;
 import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.enums.Role;
+import com.user.management.exceptions.ConflictException;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.models.User;
-import com.user.management.repository.UserRepository;
+import com.user.management.repository.UserRepositoryPort;
 
 import lombok.AllArgsConstructor;
 
@@ -28,11 +27,14 @@ import lombok.AllArgsConstructor;
 public class UserService implements UserDetailsService {
 
     private final ModelMapper modelMapper;
-    private final UserRepository userRepository;  
+    private final UserRepositoryPort userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Transactional
     public UserResponseDTO saveUser(UserRequestDTO user) {
+        if (userRepository.existsByLogin(user.getLogin())) {
+            throw new ConflictException("Confic user duplicate by: "+user.getLogin());
+        }
+        
         User userEntity = modelMapper.map(user, User.class);
         userEntity.setRole(Role.valueOf(user.getRole().toUpperCase()));
         userEntity.setPassword(passwordEncoder.encode(user.getPassword()));
@@ -64,7 +66,6 @@ public class UserService implements UserDetailsService {
         return responseDTO;
     }
 
-    @Transactional
     public UserResponseDTO updateUser(String id, UserUpdateRequestDTO request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
@@ -91,7 +92,6 @@ public class UserService implements UserDetailsService {
         return responseDTO;
     }
 
-    @Transactional
     public void deleteUserById(String id) {
         if (!userRepository.existsById(id)) {
             throw new UserNotFoundException("User with id '" + id + "' not found");

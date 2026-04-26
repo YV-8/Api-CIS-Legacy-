@@ -6,7 +6,7 @@ import com.user.management.dtos.UserUpdateRequestDTO;
 import com.user.management.enums.Role;
 import com.user.management.exceptions.UserNotFoundException;
 import com.user.management.models.User;
-import com.user.management.repository.UserRepository;
+import com.user.management.repository.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +30,7 @@ class UserServiceTest {
     private ModelMapper modelMapper;
 
     @Mock
-    private UserRepository userRepository;
+    private UserRepositoryPort userRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;

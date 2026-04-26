@@ -1,0 +1,48 @@
+services:
+
+  mongo:
+    image: mongo:7
+    container_name: sd3_mongo_cis
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: sd3
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-cis:
+    build:
+      context: .
+      dockerfile: CIS.Api/Dockerfile
+    container_name: api_cis
+    restart: always
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Switch database engine without rebuild: MongoDb | Rdbms
+      Persistence__Provider: Rdbms
+      # MySQL connection (active when Persistence__Provider=Rdbms)
+      ConnectionStrings__DefaultConnection: "Server=sd3_mysql;Port=3306;Database=sd3;User=SOME_USER;Password=SOME_PASSWORD;AllowUserVariables=true;AllowZeroDateTime=true"
+      # MongoDB connection (active when Persistence__Provider=MongoDb)
+      ConnectionStrings__MongoDb: "mongodb://mongo:27017"
+      MongoDb__DatabaseName: sd3
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - default
+      - customer-api_default
+
+networks:
+  customer-api_default:
+    external: true
+
+volumes:
+  mongo_data:

@@ -101,17 +101,22 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+var persistenceProvider = builder.Configuration["Persistence:Provider"]?.ToLower() ?? "rdbms";
 var useInMemoryForTests = builder.Configuration.GetValue<bool>("Testing:UseInMemoryDatabase");
-if (useInMemoryForTests)
+
+if (persistenceProvider != "mongodb")
 {
-    builder.Services.AddDbContext<CisDbContext>(options =>
-        options.UseInMemoryDatabase("cis_api_tests_shared"));
-}
-else
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    builder.Services.AddDbContext<CisDbContext>(options =>
-        options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    if (useInMemoryForTests)
+    {
+        builder.Services.AddDbContext<CisDbContext>(options =>
+            options.UseInMemoryDatabase("cis_api_tests_shared"));
+    }
+    else
+    {
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        builder.Services.AddDbContext<CisDbContext>(options =>
+            options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    }
 }
 
 builder.Services.AddCisPersistence(builder.Configuration);
@@ -122,8 +127,11 @@ builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IVoteService, VoteService>();
 builder.Services.AddScoped<IStatsService, StatsService>();
 
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<CisDbContext>();
+var healthChecks = builder.Services.AddHealthChecks();
+if (persistenceProvider != "mongodb" && !useInMemoryForTests)
+{
+    healthChecks.AddDbContextCheck<CisDbContext>();
+}
 
 var app = builder.Build();
 

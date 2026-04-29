@@ -1,0 +1,41 @@
+============================================================
+CIS Platform — Migration Script (US-23)
+============================================================
+  MySQL:    sd3 @ localhost:3307
+  MongoDB:  sd3 @ mongodb://localhost:27017
+  Batch:    500
+  Modo:     migrate
+  Log file: migration_log_20260429_002727.txt
+
+
+── Migracion ────────────────────────────────────────
+  [users] 7,000 filas a migrar
+  [users] 7,000/7,000 (100%) OK                       
+  [topics] 7,000 filas a migrar
+  [topics] 7,000/7,000 (100%) OK                       
+  [ideas] 7,000 filas a migrar
+  [ideas] 7,000/7,000 (100%) OK                       
+  [votes] 7,000 filas a migrar
+  [votes] 7,000/7,000 (100%) OK                       
+  [comments] 14,000 filas a migrar
+  [comments] 14,000/14,000 (100%) OK                       
+
+── Indices ───────────────────────────────────────────
+  [users] idx_id OK
+  [topics] idx_id OK
+  [ideas] idx_id OK
+  [votes] idx_id OK
+  [comments] idx_id OK
+  [votes] uniq_idea_user OK (UNIQUE IdeaId+UserId, partial)
+  [ideas] idx_topic OK
+  [comments] idx_idea OK
+
+============================================================
+Migracion completada en 2.1s (0.0 min)
+============================================================
+Resumen:
+  users        MySQL:      7,000  →  Mongo:      7,000
+  topics       MySQL:      7,000  →  Mongo:      7,000
+  ideas        MySQL:      7,000  →  Mongo:      7,000
+  votes        MySQL:      7,000  →  Mongo:      7,000
+  comments     MySQL:     14,000  →  Mongo:     14,000

@@ -67,6 +67,8 @@ spring.log
 # Python scripts
 # ===========================
 **/.venv/
+scripts/seed/.venv/
+scripts/mysql_to_mongo/.venv/
 scripts/mysql_to_mongo/migration_state.json
 scripts/**/__pycache__/
 scripts/**/*.pyc

@@ -95,10 +95,6 @@ FIELD_MAPS: dict[str, dict[str, str]] = {
 }
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
 def transform_row(row: dict, field_map: dict[str, str]) -> dict:
     """Renombra las claves de `row` segun `field_map` y descarta las no listadas."""
     return {mongo_key: row[mysql_key] for mysql_key, mongo_key in field_map.items() if mysql_key in row}

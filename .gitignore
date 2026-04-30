@@ -488,3 +488,9 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 .vscode/launch.json
+# Backup files and migrations
+.venv/
+seed/.venv/
+backup_*.json
+.bson
+migration_*.txt

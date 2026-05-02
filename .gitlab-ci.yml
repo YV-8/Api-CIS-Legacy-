@@ -2,6 +2,7 @@ stages:
   - build
   - test
   - coverage
+  - migrate
   - docker
 
 variables:
@@ -68,11 +69,87 @@ coverage_check:
     - develop
     - /^feature\/.*/
 
+db:migrate:mysql:
+  stage: migrate
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  dependencies:
+    - build
+  before_script:
+    - echo "📦 Instalando EF Core CLI..."
+    - dotnet tool install --global dotnet-ef
+    - export PATH="$PATH:/root/.dotnet/tools"
+    - echo "🔗 Conectando a MySQL → ${DB_HOST}:${DB_PORT}/${DB_NAME}"
+  script:
+    - echo "▶️  Migración iniciada → $(date '+%Y-%m-%d %H:%M:%S')" | tee migration_mysql.log
+    - dotnet ef migrations list --project CIS.Api/CIS.Api.csproj >> migration_mysql.log 2>&1
+    - dotnet ef database update --project CIS.Api/CIS.Api.csproj >> migration_mysql.log 2>&1
+    - echo "✅ Migración MySQL completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mysql.log
+  artifacts:
+    name: "cis-migration-mysql-${CI_PIPELINE_ID}"
+    paths:
+      - migration_mysql.log
+    expire_in: 30 days
+    when: always          
+  only:
+    - main
+    - develop
+
+
+db:migrate:mongodb:
+  stage: migrate
+  image: node:20-slim
+  before_script:
+    - echo "📦 Instalando migrate-mongo..."
+    - npm install -g migrate-mongo
+    - echo "🔗 Conectando a MongoDB → ${MONGODB_URI}"
+  script:
+    - echo "▶️  Migración MongoDB iniciada → $(date '+%Y-%m-%d %H:%M:%S')" | tee migration_mongo.log
+    - migrate-mongo up --config migrate-mongo-config.js >> migration_mongo.log 2>&1
+    - migrate-mongo status --config migrate-mongo-config.js >> migration_mongo.log 2>&1
+    - echo "✅ Migración MongoDB completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mongo.log
+  artifacts:
+    name: "cis-migration-mongo-${CI_PIPELINE_ID}"
+    paths:
+      - migration_mongo.log
+    expire_in: 30 days
+    when: always
+  only:
+    - main
+    - develop
+
+db:rollback:
+  stage: migrate
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  before_script:
+    - dotnet tool install --global dotnet-ef
+    - export PATH="$PATH:/root/.dotnet/tools"
+  script:
+    - echo "⚠️  ROLLBACK MySQL iniciado → $(date '+%Y-%m-%d %H:%M:%S')" | tee rollback.log
+    - dotnet ef database update --target 0 --project CIS.Api/CIS.Api.csproj >> rollback.log 2>&1
+    - echo "🔄 Estado tras rollback:" | tee -a rollback.log
+    - dotnet ef migrations list --project CIS.Api/CIS.Api.csproj >> rollback.log 2>&1
+  artifacts:
+    name: "cis-rollback-${CI_PIPELINE_ID}"
+    paths:
+      - rollback.log
+    expire_in: 30 days
+    when: always
+  when: on_failure
+  needs:
+    - job: db:migrate:mysql
+    - job: db:migrate:mongodb
+  only:
+    - main
+    - develop
+
 docker_build:
   stage: docker
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
+  needs:
+    - job: db.migrate:mysql
+    - job: db.migrate:mongodb
   script:
     - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG -f CIS.Api/Dockerfile .
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY

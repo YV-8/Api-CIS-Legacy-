@@ -24,6 +24,7 @@ unit_tests:
         - target/surefire-reports/TEST-*.xml
     paths:
       - target/surefire-reports/
+      - target/site/jacoco/
   only:
     - main
     - develop
@@ -33,10 +34,23 @@ unit_tests:
 coverage:
   stage: coverage
   image: maven:3.9.9-eclipse-temurin-21
+  needs:
+    - job: unit_tests
+      artifacts: true
   script:
-    - echo "Generating coverage report..."
-    - mvn clean test jacoco:report
-    - echo "Coverage report generated"
+    - echo "Evaluating coverage report..."
+    - |
+      awk -F',' 'NR > 1 {
+        missed  += $4 + $6 + $8 + $10 + $12 + $14
+        covered += $5 + $7 + $9 + $11 + $13 + $15
+      } END {
+        if (missed + covered > 0)
+          printf "Coverage: %.2f%%\n", covered / (missed + covered) * 100
+        else
+          print "Coverage: 0.00%"
+      }' target/site/jacoco/jacoco.csv
+    - echo "Coverage evaluation completed"
+  coverage: '/Coverage: (\d+\.\d+)%/'
   artifacts:
     when: always
     paths:

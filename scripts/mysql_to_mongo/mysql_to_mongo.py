@@ -18,12 +18,15 @@ Modelo migrado
 
 Uso
 ---
-  python mysql_to_mongo.py check      # verifica conectividad con MySQL y MongoDB
-  python mysql_to_mongo.py migrate    # migra con rollback automático ante fallos
-  python mysql_to_mongo.py rollback   # rollback manual de la última sesión
+  python mysql_to_mongo.py check             # verifica conectividad con MySQL y MongoDB
+  python mysql_to_mongo.py migrate           # migra con rollback automático ante fallos
+  python mysql_to_mongo.py migrate --verify  # migra y verifica integridad al finalizar
+  python mysql_to_mongo.py verify            # verifica integridad post-migración (3 niveles)
+  python mysql_to_mongo.py rollback          # rollback manual de la última sesión
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -57,6 +60,40 @@ load_dotenv(_ROOT / ".env", override=False)
 
 def _env(key: str, default: str | None = None) -> str | None:
     return os.environ.get(key, default)
+
+
+# ─── Integridad: hashing ──────────────────────────────────────────────────────
+
+_HASH_FIELDS = ("id", "login", "name", "password", "role")
+
+
+def hash_record(record: dict) -> str:
+    """SHA-256 de la representación canónica de un registro.
+
+    Normalización aplicada:
+    - Campos fijos en orden alfabético (sort_keys).
+    - Valores coercionados a str; None → "".
+    - ensure_ascii elimina diferencias de encoding entre MySQL y MongoDB.
+    """
+    canonical = json.dumps(
+        {field: str(record.get(field) or "") for field in _HASH_FIELDS},
+        sort_keys=True,
+        ensure_ascii=True,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def hash_batch(records: list[dict]) -> str:
+    """SHA-256 de un batch de registros ordenados por id."""
+    sorted_records = sorted(records, key=lambda r: str(r.get("id", "")))
+    combined = "||".join(hash_record(r) for r in sorted_records)
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+
+
+def hash_dataset(batch_hashes: list[str]) -> str:
+    """SHA-256 global derivado de la lista de hashes por batch."""
+    combined = "|".join(batch_hashes)
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
 
 # ─── Argumentos CLI ───────────────────────────────────────────────────────────
@@ -115,6 +152,28 @@ Subcomandos disponibles:
         default=500,
         help="Documentos por operación bulk (default: 500).",
     )
+    p_migrate.add_argument(
+        "--verify",
+        action="store_true",
+        help="Ejecuta verificación de integridad (nivel 1) al finalizar la migración.",
+    )
+
+    # ── verify ────────────────────────────────────────────────────────────────
+    p_verify = sub.add_parser(
+        "verify",
+        help="Verifica la integridad de la última migración comparando hashes SHA-256",
+    )
+    mv = p_verify.add_argument_group("MySQL (solo para diagnóstico per-record)")
+    mv.add_argument("--mysql-host", default=_env("MYSQL_HOST", "localhost"))
+    mv.add_argument("--mysql-port", type=int, default=int(_env("MYSQL_PORT", "3307")))
+    mv.add_argument("--mysql-db",   default=_env("DB_NAME", "sd3"))
+    mv.add_argument("--mysql-user", default=_env("DB_USERNAME"))
+    mv.add_argument("--mysql-password", default=_env("DB_PASSWORD"))
+    pv = p_verify.add_argument_group("MongoDB")
+    pv.add_argument("--mongo-uri", default=_env("MONGODB_URI", "mongodb://localhost:27017"))
+    pv.add_argument("--mongo-db",  default=_env("MONGO_DB_NAME", _env("DB_NAME", "sd3")))
+    pv.add_argument("--mongo-collection", default="users")
+    p_verify.add_argument("--verbose", "-v", action="store_true")
 
     # ── rollback ──────────────────────────────────────────────────────────────
     p_rollback = sub.add_parser(
@@ -244,15 +303,21 @@ def upsert_batch(collection, documents: list[dict]) -> tuple[int, int, list[str]
 
 # ─── Estado de migración (para rollback manual) ───────────────────────────────
 
-def save_migration_state(migrated_ids: list[str], pre_existing_ids: set[str]) -> None:
+def save_migration_state(
+    migrated_ids: list[str],
+    pre_existing_ids: set[str],
+    integrity_data: dict | None = None,
+) -> None:
     state = {
         "migrated_at": datetime.now(timezone.utc).isoformat(),
         "migrated_ids": migrated_ids,
         "pre_existing_ids": list(pre_existing_ids),
     }
+    if integrity_data:
+        state["integrity"] = integrity_data
     _STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
     log.info("Estado de migración guardado en: %s", _STATE_FILE.name)
-    log.info("  → Para deshacer ejecutá: python migrate_mysql_to_mongo.py rollback")
+    log.info("  → Para deshacer ejecutá: python mysql_to_mongo.py rollback")
 
 
 def load_migration_state() -> dict:
@@ -378,6 +443,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     total_written = 0
     total_errors = 0
     all_migrated_ids: list[str] = []
+    batch_hashes_mysql: list[str] = []
 
     log.info("Rollback automático ACTIVADO ante cualquier fallo.")
     log.info("Migrando %d usuarios en batches de %d...", total, args.batch_size)
@@ -389,6 +455,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             total_written += written
             total_errors += errors
             all_migrated_ids.extend(written_ids)
+            batch_hashes_mysql.append(hash_batch(batch))
 
             log.info(
                 "  Batch %d/%d → escritos: %d  errores: %d",
@@ -403,8 +470,15 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         mongo_client.close()
         sys.exit(1)
 
-    # 7. Guardar estado para posible rollback manual
-    save_migration_state(all_migrated_ids, pre_existing_ids)
+    # 7. Guardar estado con hashes de integridad
+    integrity_data = {
+        "batch_size": args.batch_size,
+        "total_records": total,
+        "batch_hashes_mysql": batch_hashes_mysql,
+        "dataset_hash_mysql": hash_dataset(batch_hashes_mysql),
+        "verified": False,
+    }
+    save_migration_state(all_migrated_ids, pre_existing_ids, integrity_data)
 
     # 8. Rollback automático si hubo errores parciales
     if total_errors > 0:
@@ -426,6 +500,17 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     log.info("  Escritos/actualizados : %d", total_written)
     log.info("  Errores               : %d", total_errors)
     log.info("  Base destino          : %s.%s", args.mongo_db, args.mongo_collection)
+
+    # 9. Verificación de integridad automática (--verify)
+    if args.verify:
+        log.info("=" * 50)
+        log.info("Ejecutando verificación de integridad post-migración...")
+        _run_level1_verify(
+            integrity_data["dataset_hash_mysql"],
+            all_migrated_ids,
+            args.batch_size,
+            args,
+        )
 
 
 def cmd_rollback(args: argparse.Namespace) -> None:
@@ -457,6 +542,177 @@ def cmd_rollback(args: argparse.Namespace) -> None:
     log.info("Rollback completado. La colección está como antes de la migración.")
 
 
+# ─── Verificación de integridad ───────────────────────────────────────────────
+
+def _fetch_mongo_batch(collection, ids: list[str]) -> list[dict]:
+    """Lee de MongoDB solo los documentos de los IDs indicados, ordenados por _id."""
+    docs = list(collection.find({"_id": {"$in": ids}}, {"_id": 1, "id": 1, "name": 1, "login": 1, "password": 1, "role": 1}))
+    for doc in docs:
+        doc["id"] = doc.get("id") or doc["_id"]
+    return docs
+
+
+def _run_level1_verify(
+    dataset_hash_mysql: str,
+    migrated_ids: list[str],
+    batch_size: int,
+    args: argparse.Namespace,
+) -> None:
+    """Nivel 1 — compara el hash global. Llamado desde migrate --verify."""
+    mongo_client = connect_mongo(args)
+    collection = mongo_client[args.mongo_db][args.mongo_collection]
+    docs = _fetch_mongo_batch(collection, migrated_ids)
+    mongo_client.close()
+
+    docs.sort(key=lambda d: str(d.get("id", "")))
+    batches_mongo = [docs[i: i + batch_size] for i in range(0, len(docs), batch_size)]
+    dataset_hash_mongo = hash_dataset([hash_batch(b) for b in batches_mongo])
+
+    if dataset_hash_mysql == dataset_hash_mongo:
+        log.info("✓ Integridad verificada — hash global coincide.")
+    else:
+        log.error("✗ Hash global NO coincide. Ejecutá 'verify' para diagnóstico detallado.")
+        sys.exit(3)
+
+
+def cmd_verify(args: argparse.Namespace) -> None:
+    log.info("=" * 50)
+    log.info("VERIFICACIÓN DE INTEGRIDAD")
+    log.info("=" * 50)
+
+    state = load_migration_state()
+    integrity = state.get("integrity")
+
+    if not integrity:
+        log.error(
+            "El archivo de estado no contiene datos de integridad. "
+            "Volvé a ejecutar 'migrate' para regenerarlos."
+        )
+        sys.exit(1)
+
+    migrated_ids: list[str]     = state["migrated_ids"]
+    batch_size: int              = integrity["batch_size"]
+    batch_hashes_mysql: list[str] = integrity["batch_hashes_mysql"]
+    dataset_hash_mysql: str      = integrity["dataset_hash_mysql"]
+    total_records: int           = integrity["total_records"]
+
+    log.info("Registros migrados    : %d", total_records)
+    log.info("Batch size            : %d", batch_size)
+    log.info("Hash global (MySQL)   : %s", dataset_hash_mysql)
+
+    # ── Conectar a MongoDB y leer documentos migrados ─────────────────────────
+    mongo_client = connect_mongo(args)
+    collection = mongo_client[args.mongo_db][args.mongo_collection]
+    docs = _fetch_mongo_batch(collection, migrated_ids)
+    mongo_client.close()
+
+    if len(docs) != total_records:
+        log.error(
+            "Conteo incorrecto — MySQL: %d  /  MongoDB: %d",
+            total_records, len(docs),
+        )
+
+    # Ordenar por id para que los batches sean comparables con MySQL
+    docs.sort(key=lambda d: str(d.get("id", "")))
+
+    batches_mongo = [docs[i: i + batch_size] for i in range(0, len(docs), batch_size)]
+    batch_hashes_mongo = [hash_batch(b) for b in batches_mongo]
+    dataset_hash_mongo = hash_dataset(batch_hashes_mongo)
+
+    log.info("Hash global (MongoDB) : %s", dataset_hash_mongo)
+
+    # ── Nivel 1: hash global ──────────────────────────────────────────────────
+    if dataset_hash_mysql == dataset_hash_mongo:
+        log.info("=" * 50)
+        log.info("✓ Integridad OK — %d/%d registros verificados correctamente.", total_records, total_records)
+        _mark_verified(state)
+        return
+
+    log.warning("Hash global no coincide. Iniciando diagnóstico por batch...")
+
+    # ── Nivel 2: comparar hashes por batch ────────────────────────────────────
+    failing_batch_indices = [
+        i for i, (h_mysql, h_mongo) in enumerate(zip(batch_hashes_mysql, batch_hashes_mongo))
+        if h_mysql != h_mongo
+    ]
+
+    log.warning(
+        "Batches con discrepancias: %d/%d → %s",
+        len(failing_batch_indices),
+        len(batch_hashes_mysql),
+        failing_batch_indices,
+    )
+
+    # ── Nivel 3: per-record en los batches fallidos ───────────────────────────
+    mismatched: list[dict] = []
+    missing_in_mongo: list[str] = []
+
+    mysql_conn = connect_mysql(args)
+
+    for batch_idx in failing_batch_indices:
+        start = batch_idx * batch_size
+        end = start + batch_size
+        batch_ids = migrated_ids[start:end]
+
+        # Leer solo estos registros desde MySQL
+        placeholders = ",".join(["%s"] * len(batch_ids))
+        with mysql_conn.cursor() as cur:
+            cur.execute(
+                f"SELECT id, name, login, password, role FROM users WHERE id IN ({placeholders})",
+                batch_ids,
+            )
+            mysql_rows = {row["id"]: row for row in cur.fetchall()}
+
+        mongo_batch_docs = {d["id"]: d for d in batches_mongo[batch_idx]}
+
+        for uid in batch_ids:
+            mysql_row = mysql_rows.get(uid)
+            mongo_doc = mongo_batch_docs.get(uid)
+
+            if mongo_doc is None:
+                missing_in_mongo.append(uid)
+                continue
+
+            for field in _HASH_FIELDS:
+                mysql_val = str(mysql_row.get(field) or "")
+                mongo_val = str(mongo_doc.get(field) or "")
+                if mysql_val != mongo_val:
+                    mismatched.append({
+                        "id": uid,
+                        "field": field,
+                        "mysql": mysql_val,
+                        "mongo": mongo_val,
+                    })
+
+    mysql_conn.close()
+
+    # ── Reporte final ─────────────────────────────────────────────────────────
+    log.error("=" * 50)
+    log.error("RESULTADO: integridad comprometida.")
+    if missing_in_mongo:
+        log.error("  Registros ausentes en MongoDB (%d):", len(missing_in_mongo))
+        for uid in missing_in_mongo:
+            log.error("    - %s", uid)
+    if mismatched:
+        log.error("  Registros con datos incorrectos (%d):", len(mismatched))
+        for item in mismatched:
+            log.error(
+                "    id=%-38s  campo=%-10s  mysql=%r  mongo=%r",
+                item["id"], item["field"], item["mysql"][:40], item["mongo"][:40],
+            )
+    log.error("=" * 50)
+    sys.exit(3)
+
+
+def _mark_verified(state: dict) -> None:
+    """Marca integrity.verified = True en migration_state.json."""
+    if "integrity" in state:
+        state["integrity"]["verified"] = True
+        state["integrity"]["verified_at"] = datetime.now(timezone.utc).isoformat()
+        _STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        log.info("Estado actualizado: integrity.verified = true")
+
+
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -468,5 +724,7 @@ if __name__ == "__main__":
         cmd_check(args)
     elif args.command == "migrate":
         cmd_migrate(args)
+    elif args.command == "verify":
+        cmd_verify(args)
     elif args.command == "rollback":
         cmd_rollback(args)

@@ -35,6 +35,9 @@ import bcrypt
 from dotenv import load_dotenv
 from faker import Faker
 
+# Tamaño de cada lote para inserciones en batch
+BATCH_SIZE = 500
+
 # ── Cargar .env desde la raíz del proyecto ────────────────────────────────────
 ROOT_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT_DIR / ".env")
@@ -52,34 +55,51 @@ ROLE_WEIGHTS = [0.1, 0.2, 0.7]  # 10% ADMIN, 20% OWNER, 70% USER
 # Generación de datos
 # ─────────────────────────────────────────────────────────────────────────────
 
-def hash_password(plain: str) -> str:
+def hash_password(plain: str, rounds: int = 12) -> str:
     """Devuelve el hash BCrypt de la contraseña (compatible con Spring Security)."""
-    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt(rounds)).decode()
 
 
-def generate_user(index: int) -> dict:
+# Se hashea una única vez la contraseña común para evitar 10k llamadas a bcrypt
+_SEED_PASSWORD_HASH: str | None = None
+
+def get_seed_password_hash(rounds: int = 12) -> str:
+    global _SEED_PASSWORD_HASH
+    if _SEED_PASSWORD_HASH is None:
+        print(f"Hasheando contraseña de prueba (bcrypt rounds={rounds})...")
+        _SEED_PASSWORD_HASH = hash_password("12345", rounds)
+    return _SEED_PASSWORD_HASH
+
+
+def generate_user(index: int, password_hash: str) -> dict:
     """
     Genera un usuario con datos aleatorios.
     `index` se usa para garantizar logins únicos.
+    `password_hash` se reutiliza para evitar recalcular bcrypt por cada usuario.
     """
     name = fake.name()[:200]
     login = f"{fake.user_name()}{index}"[:20]
-    plain_password = "12345"          # contraseña fija para pruebas
     role = random.choices(ROLES, weights=ROLE_WEIGHTS, k=1)[0]
 
     return {
         "id": str(uuid.uuid4()),
         "name": name,
         "login": login,
-        "password": hash_password(plain_password),
+        "password": password_hash,
         "role": role,
     }
 
 
-def generate_users(count: int) -> list[dict]:
-    """Genera una lista de `count` usuarios únicos."""
-    print(f"Generando {count} usuarios...")
-    return [generate_user(i) for i in range(1, count + 1)]
+def generate_users(count: int, rounds: int = 12) -> list[dict]:
+    """Genera una lista de `count` usuarios únicos con feedback de progreso."""
+    password_hash = get_seed_password_hash(rounds)
+    print(f"Generando {count} usuarios...", flush=True)
+    users = []
+    for i in range(1, count + 1):
+        users.append(generate_user(i, password_hash))
+        if i % 1000 == 0 or i == count:
+            print(f"  {i}/{count} usuarios generados", flush=True)
+    return users
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -106,16 +126,22 @@ def seed_mysql(users: list[dict]) -> None:
 
     conn = pymysql.connect(**config)
     try:
+        sql = """
+            INSERT INTO users (id, name, login, password, role)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        rows = [(u["id"], u["name"], u["login"], u["password"], u["role"])
+                for u in users]
+        total = len(rows)
+        inserted = 0
         with conn.cursor() as cursor:
-            sql = """
-                INSERT INTO users (id, name, login, password, role)
-                VALUES (%s, %s, %s, %s, %s)
-            """
-            rows = [(u["id"], u["name"], u["login"], u["password"], u["role"])
-                    for u in users]
-            cursor.executemany(sql, rows)
-        conn.commit()
-        print(f"OK: {len(users)} usuarios insertados en MySQL.")
+            for start in range(0, total, BATCH_SIZE):
+                batch = rows[start:start + BATCH_SIZE]
+                cursor.executemany(sql, batch)
+                conn.commit()
+                inserted += len(batch)
+                print(f"  MySQL: {inserted}/{total} usuarios insertados", flush=True)
+        print(f"OK: {total} usuarios insertados en MySQL.")
     except Exception as exc:
         conn.rollback()
         sys.exit(f"ERROR al insertar en MySQL: {exc}")
@@ -141,8 +167,14 @@ def seed_mongodb(users: list[dict]) -> None:
     client = MongoClient(uri)
     try:
         db = client[db_name]
-        result = db["users"].insert_many(users)
-        print(f"OK: {len(result.inserted_ids)} usuarios insertados en MongoDB.")
+        total = len(users)
+        inserted = 0
+        for start in range(0, total, BATCH_SIZE):
+            batch = users[start:start + BATCH_SIZE]
+            db["users"].insert_many(batch, ordered=False)
+            inserted += len(batch)
+            print(f"  MongoDB: {inserted}/{total} usuarios insertados", flush=True)
+        print(f"OK: {total} usuarios insertados en MongoDB.")
     except Exception as exc:
         sys.exit(f"ERROR al insertar en MongoDB: {exc}")
     finally:
@@ -185,13 +217,22 @@ def parse_args() -> argparse.Namespace:
         default="mysql",
         help="Base de datos destino.",
     )
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=12,
+        help=(
+            "Cost factor de bcrypt (4-31). "
+            "Usa 4 para seeds rápidos en dev, 12 para producción."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
 
-    users = generate_users(args.count)
+    users = generate_users(args.count, args.rounds)
 
     if args.db == "mysql":
         seed_mysql(users)

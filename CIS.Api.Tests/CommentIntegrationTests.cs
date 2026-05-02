@@ -21,49 +21,146 @@ public class CommentIntegrationTests : IClassFixture<CisApiFactory>
         _factory = factory;
     }
 
+    // ─── POST /api/v1/topics/{topicId}/ideas/{ideaId}/comments ───────────────
+
     [Fact]
-    public async Task CreateAndListComments_WhenCommentsAllowed_ReturnsCreatedAndOk()
+    public async Task CreateComment_WithMinimumValidContent_ReturnsCreated()
     {
-        var client = _factory.CreateClient();
         var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
-        client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", CreateToken("commenter-1", "USER"));
+        var client = AuthorizedClient("commenter-min", "USER");
 
-        var createResponse = await client.PostAsync(
+        var response = await client.PostAsync(
             $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments",
-            Json("""
-            {
-              "content": "Comentario de prueba"
-            }
-            """));
+            Json("""{ "content": "x" }"""));
 
-        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
 
-        var listResponse = await client.GetAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}/comments");
+    [Fact]
+    public async Task CreateComment_WithMaximumLengthContent_ReturnsCreated()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = AuthorizedClient("commenter-max", "USER");
+        var content = new string('C', 1000);
 
-        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
-        var payload = await listResponse.Content.ReadAsStringAsync();
-        Assert.Contains("Comentario de prueba", payload);
+        var response = await client.PostAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments",
+            Json($$"""{ "content": "{{content}}" }"""));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateComment_WithNormalContent_ReturnsCreatedAndContainsId()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = AuthorizedClient("commenter-normal", "USER");
+
+        var response = await client.PostAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments",
+            Json("""{ "content": "Comentario de prueba con contenido normal" }"""));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("id", body);
     }
 
     [Fact]
     public async Task CreateComment_WhenCommentsDisabled_ReturnsForbidden()
     {
-        var client = _factory.CreateClient();
         var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: false);
-        client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", CreateToken("commenter-1", "USER"));
+        var client = AuthorizedClient("commenter-disabled", "USER");
 
         var response = await client.PostAsync(
             $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments",
-            Json("""
-            {
-              "content": "No debería crearse"
-            }
-            """));
+            Json("""{ "content": "No deberia crearse" }"""));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    [Fact]
+    public async Task CreateComment_WithoutToken_ReturnsUnauthorized()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments",
+            Json("""{ "content": "Sin autenticacion" }"""));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ─── GET /api/v1/topics/{topicId}/ideas/{ideaId}/comments ────────────────
+
+    [Fact]
+    public async Task GetComments_WithMinimumValidInput_ReturnsOk()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments?page=0&size=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetComments_WithMaximumPageSize_ReturnsOk()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments?page=0&size=50");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetComments_WithNormalInput_ReturnsOkAndPaginatedBody()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = AuthorizedClient("commenter-list", "USER");
+
+        await client.PostAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments",
+            Json("""{ "content": "Comentario para listar" }"""));
+
+        var response = await client.GetAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments?page=0&size=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("content", body);
+        Assert.Contains("Comentario para listar", body);
+    }
+
+    [Fact]
+    public async Task GetComments_WithNegativePage_ReturnsBadRequest()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments?page=-1&size=10");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetComments_WithSizeExceedingLimit_ReturnsBadRequest()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(allowComments: true);
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/api/v1/topics/{topicId}/ideas/{ideaId}/comments?page=0&size=51");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private async Task<(string TopicId, string IdeaId)> SeedTopicAndIdeaAsync(bool allowComments)
     {
@@ -73,7 +170,7 @@ public class CommentIntegrationTests : IClassFixture<CisApiFactory>
         var topic = new Topic
         {
             Id = Guid.NewGuid().ToString(),
-            Title = "Topic " + Guid.NewGuid().ToString().Substring(0, 8),
+            Title = "Topic " + Guid.NewGuid().ToString()[..8],
             Description = "seed topic",
             AuthorId = "author-1",
             Type = CIS.BusinessLogic.Domain.TopicType.other,
@@ -96,6 +193,14 @@ public class CommentIntegrationTests : IClassFixture<CisApiFactory>
         await context.SaveChangesAsync();
 
         return (topic.Id, idea.Id);
+    }
+
+    private HttpClient AuthorizedClient(string sub, string role)
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", CreateToken(sub, role));
+        return client;
     }
 
     private static StringContent Json(string payload) =>

@@ -1,117 +1,392 @@
-using CIS.BusinessLogic.dtos;
-using CIS.BusinessLogic.Services;
-using CIS.Api.Extensions;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using System.Threading;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Text;
+using CIS.DataAcces.Data;
+using CIS.DataAcces.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using Xunit;
 
 namespace CIS.Api.Tests;
 
-[ApiController]
-[Route("api/v1/topics/{topicId}/ideas")]
-public class IdeasIntegrationTest : ControllerBase
+public class IdeasIntegrationTests : IClassFixture<CisApiFactory>
 {
-    private readonly IIdeaService _ideaService;
- 
-    public IdeasIntegrationTest(IIdeaService ideaService)
+    private const string TestJwtSecret = "your-super-secret-key-minimum-256-bits-long";
+    private readonly CisApiFactory _factory;
+
+    public IdeasIntegrationTests(CisApiFactory factory)
     {
-        _ideaService = ideaService;
+        _factory = factory;
     }
- 
-    [HttpPost]
-    [Authorize]
-    public async Task<IActionResult> CreateIdea(string topicId, [FromBody] CreateIdeaRequest request, CancellationToken cancellationToken)
+
+    // ─── GET /api/v1/topics/{topicId}/ideas ──────────────────────────────────
+
+    [Fact]
+    public async Task GetIdeas_WithMinimumValidInput_ReturnsOk()
     {
-        var authorId = User.GetSubjectId();
- 
-        if (string.IsNullOrWhiteSpace(authorId))
-            return Unauthorized();
- 
-        var createdIdea = await _ideaService.CreateIdeaAsync(topicId, request, authorId, cancellationToken);
- 
-        return Created($"/api/v1/topics/{topicId}/ideas/{createdIdea.Id}", createdIdea);
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/topics/{topicId}/ideas?page=0&size=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
- 
-    [HttpGet]
-    public async Task<IActionResult> GetIdeas(
-        string topicId,
-        [FromQuery] int page = 0,
-        [FromQuery] int size = 10,
-        [FromQuery] string? authorId = null,
-        [FromQuery] string[]? sort = null,
-        CancellationToken cancellationToken = default)
+
+    [Fact]
+    public async Task GetIdeas_WithMaximumPageSize_ReturnsOk()
     {
-        const int maxSize = 50;
- 
-        if (page < 0)
-        {
-            return BadRequest(new { message = "Page must be greater than or equal to 0." });
-        }
- 
-        if (size <= 0 || size > maxSize)
-        {
-            return BadRequest(new { message = $"Size must be between 1 and {maxSize}." });
-        }
- 
-        var result = await _ideaService.GetIdeasAsync(topicId, page, size, authorId, sort, cancellationToken);
- 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.Path}";
-        var links = new List<string>();
- 
-        if (page > 0)
-        {
-            links.Add($"<{baseUrl}?page=0&size={size}>; rel=\"first\"");
-            links.Add($"<{baseUrl}?page={page - 1}&size={size}>; rel=\"prev\"");
-        }
- 
-        if (page < result.TotalPages - 1)
-        {
-            links.Add($"<{baseUrl}?page={page + 1}&size={size}>; rel=\"next\"");
-            links.Add($"<{baseUrl}?page={result.TotalPages - 1}&size={size}>; rel=\"last\"");
-        }
- 
-        if (links.Any())
-        {
-            Response.Headers.Append("Link", string.Join(", ", links));
-        }
- 
-        return Ok(result);
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/topics/{topicId}/ideas?page=0&size=50");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
- 
-    [HttpPut("{ideaId}")]
-    [Authorize]
-    public async Task<IActionResult> UpdateIdea(string topicId, string ideaId, [FromBody] UpdateIdeaRequest request, CancellationToken cancellationToken)
+
+    [Fact]
+    public async Task GetIdeas_WithNormalInput_ReturnsOkAndPaginatedBody()
     {
-        var currentUserId = User.GetSubjectId();
-        var currentUserRole = User.GetRole();
- 
-        if (string.IsNullOrWhiteSpace(currentUserId) || string.IsNullOrWhiteSpace(currentUserRole))
-            return Unauthorized();
- 
-        var updatedIdea = await _ideaService.UpdateIdeaAsync(topicId, ideaId, request, currentUserId, currentUserRole, cancellationToken);
-        return Ok(new
-        {
-            currentUserId,
-            data = updatedIdea
-        });
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/topics/{topicId}/ideas?page=0&size=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("content", body);
+        Assert.Contains("totalElements", body);
     }
- 
-    [HttpDelete("{ideaId}")]
-    [Authorize]
-    public async Task<IActionResult> DeleteIdea(string topicId, string ideaId, CancellationToken cancellationToken)
+
+    [Fact]
+    public async Task GetIdeas_WithNegativePage_ReturnsBadRequest()
     {
-        var currentUserId = User.GetSubjectId();
-        var currentUserRole = User.GetRole();
- 
-        if (string.IsNullOrWhiteSpace(currentUserId) || string.IsNullOrWhiteSpace(currentUserRole))
-            return Unauthorized();
- 
-        await _ideaService.DeleteIdeaAsync(topicId, ideaId, currentUserId, currentUserRole, cancellationToken);
- 
-        return Ok(new
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/topics/{topicId}/ideas?page=-1&size=10");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetIdeas_WithSizeExceedingLimit_ReturnsBadRequest()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/topics/{topicId}/ideas?page=0&size=51");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetIdeas_OnNonExistentTopic_ReturnsNotFound()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/topics/topic-no-existe/ideas?page=0&size=10");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ─── POST /api/v1/topics/{topicId}/ideas ─────────────────────────────────
+
+    [Fact]
+    public async Task CreateIdea_WithMinimumValidInput_ReturnsCreated()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = AuthorizedClient("user-min-idea", "USER");
+
+        var response = await client.PostAsync($"/api/v1/topics/{topicId}/ideas", Json("""
+            {
+              "title": "abc",
+              "description": "12345"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateIdea_WithMaximumLengthInput_ReturnsCreated()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = AuthorizedClient("user-max-idea", "USER");
+        var title = new string('I', 200);
+        var description = new string('D', 2000);
+
+        var response = await client.PostAsync($"/api/v1/topics/{topicId}/ideas", Json($$"""
+            {
+              "title": "{{title}}",
+              "description": "{{description}}"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateIdea_WithNormalInput_ReturnsCreatedWithBody()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = AuthorizedClient("user-normal-idea", "USER");
+
+        var response = await client.PostAsync($"/api/v1/topics/{topicId}/ideas", Json("""
+            {
+              "title": "Idea de prueba normal",
+              "description": "Descripcion de la idea con longitud razonable"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("id", body);
+        Assert.Contains("Idea de prueba normal", body);
+    }
+
+    [Fact]
+    public async Task CreateIdea_WithoutToken_ReturnsUnauthorized()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.PostAsync($"/api/v1/topics/{topicId}/ideas", Json("""
+            {
+              "title": "Idea sin token",
+              "description": "No deberia crearse sin autenticacion"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateIdea_OnNonExistentTopic_ReturnsNotFound()
+    {
+        var client = AuthorizedClient("user-bad-topic", "USER");
+
+        var response = await client.PostAsync("/api/v1/topics/topic-fantasma/ideas", Json("""
+            {
+              "title": "Idea huerfana",
+              "description": "Topic no existe en la base de datos"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateIdea_WithTitleTooShort_ReturnsBadRequest()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = AuthorizedClient("user-title-short", "USER");
+
+        var response = await client.PostAsync($"/api/v1/topics/{topicId}/ideas", Json("""
+            {
+              "title": "ab",
+              "description": "Descripcion valida para la idea"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ─── PUT /api/v1/topics/{topicId}/ideas/{ideaId} ─────────────────────────
+
+    [Fact]
+    public async Task UpdateIdea_AsOwner_WithMinimumValidInput_ReturnsOk()
+    {
+        var authorId = "owner-idea-min";
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(authorId);
+        var client = AuthorizedClient(authorId, "USER");
+
+        var response = await client.PutAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}", Json("""
+            {
+              "title": "abc",
+              "description": "12345"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateIdea_AsOwner_WithMaximumLengthInput_ReturnsOk()
+    {
+        var authorId = "owner-idea-max";
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(authorId);
+        var client = AuthorizedClient(authorId, "USER");
+        var title = new string('U', 200);
+        var description = new string('D', 2000);
+
+        var response = await client.PutAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}", Json($$"""
+            {
+              "title": "{{title}}",
+              "description": "{{description}}"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateIdea_AsOwner_WithNormalInput_ReturnsOkWithUpdatedData()
+    {
+        var authorId = "owner-idea-normal";
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(authorId);
+        var client = AuthorizedClient(authorId, "USER");
+
+        var response = await client.PutAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}", Json("""
+            {
+              "title": "Idea actualizada",
+              "description": "Descripcion actualizada con informacion relevante"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Idea actualizada", body);
+    }
+
+    [Fact]
+    public async Task UpdateIdea_AsNonOwner_ReturnsForbidden()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync("original-author");
+        var client = AuthorizedClient("intruder-user", "USER");
+
+        var response = await client.PutAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}", Json("""
+            {
+              "title": "Intento prohibido",
+              "description": "Este usuario no deberia poder editar"
+            }
+            """));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // ─── DELETE /api/v1/topics/{topicId}/ideas/{ideaId} ──────────────────────
+
+    [Fact]
+    public async Task DeleteIdea_AsOwner_ReturnsOk()
+    {
+        var authorId = "owner-delete-idea";
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync(authorId);
+        var client = AuthorizedClient(authorId, "USER");
+
+        var response = await client.DeleteAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteIdea_AsAdmin_ReturnsOk()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync("topic-author-idea");
+        var client = AuthorizedClient("admin-user-idea", "ADMIN");
+
+        var response = await client.DeleteAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteIdea_AsNonOwner_ReturnsForbidden()
+    {
+        var (topicId, ideaId) = await SeedTopicAndIdeaAsync("real-idea-owner");
+        var client = AuthorizedClient("random-user-idea", "USER");
+
+        var response = await client.DeleteAsync($"/api/v1/topics/{topicId}/ideas/{ideaId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private async Task<string> SeedTopicAsync(string authorId = "seed-author")
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CisDbContext>();
+
+        var topic = new Topic
         {
-            message = "Idea deleted",
-            currentUserId
-        });
+            Id = Guid.NewGuid().ToString(),
+            Title = "Topic " + Guid.NewGuid().ToString()[..8],
+            Description = "Descripcion de topic semilla",
+            AuthorId = authorId,
+            Type = CIS.BusinessLogic.Domain.TopicType.other,
+            Status = CIS.BusinessLogic.Domain.TopicStatus.active,
+            AllowComments = true,
+            VoteType = "single"
+        };
+
+        context.Topics.Add(topic);
+        await context.SaveChangesAsync();
+
+        return topic.Id;
+    }
+
+    private async Task<(string TopicId, string IdeaId)> SeedTopicAndIdeaAsync(string authorId = "seed-author")
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CisDbContext>();
+
+        var topic = new Topic
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = "Topic " + Guid.NewGuid().ToString()[..8],
+            Description = "Descripcion de topic semilla",
+            AuthorId = authorId,
+            Type = CIS.BusinessLogic.Domain.TopicType.other,
+            Status = CIS.BusinessLogic.Domain.TopicStatus.active,
+            AllowComments = true,
+            VoteType = "single"
+        };
+
+        var idea = new Idea
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = "Idea semilla",
+            Description = "Descripcion semilla de la idea",
+            TopicId = topic.Id,
+            AuthorId = authorId
+        };
+
+        context.Topics.Add(topic);
+        context.Ideas.Add(idea);
+        await context.SaveChangesAsync();
+
+        return (topic.Id, idea.Id);
+    }
+
+    private HttpClient AuthorizedClient(string sub, string role)
+    {
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", CreateToken(sub, role));
+        return client;
+    }
+
+    private static StringContent Json(string payload) =>
+        new(payload, Encoding.UTF8, "application/json");
+
+    private static string CreateToken(string sub, string role)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestJwtSecret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: null,
+            audience: null,
+            claims:
+            [
+                new Claim(JwtRegisteredClaimNames.Sub, sub),
+                new Claim("role", role)
+            ],
+            expires: DateTime.UtcNow.AddMinutes(10),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

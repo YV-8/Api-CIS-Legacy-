@@ -30,6 +30,7 @@ test:
     - build
   script:
     - dotnet test CIS.BusinessLogic.Tests/CIS.BusinessLogic.Tests.csproj --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+    - dotnet test CIS.Api.Tests/CIS.Api.Tests.csproj --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
   coverage: '/Total.*?\s+(\d+%)$/'
   artifacts:
     reports:

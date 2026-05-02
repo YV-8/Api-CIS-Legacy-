@@ -1,65 +1,230 @@
-using CIS.BusinessLogic.Services;
-using Microsoft.AspNetCore.Mvc;
-using System.Threading;
+using System.Net;
+using System.Text;
+using CIS.DataAcces.Data;
+using CIS.DataAcces.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
 
-namespace CIS.Api.Controllers;
+namespace CIS.Api.Tests;
 
-[ApiController]
-[Route("api/v1/stats")]
-public class StatsIntegrationTest : ControllerBase
+public class StatsIntegrationTests : IClassFixture<CisApiFactory>
 {
-    private readonly IStatsService _statsService;
+    private readonly CisApiFactory _factory;
 
-    public StatsIntegrationTest(IStatsService statsService)
+    public StatsIntegrationTests(CisApiFactory factory)
     {
-        _statsService = statsService;
+        _factory = factory;
     }
 
-    [HttpGet("top")]
-    public async Task<IActionResult> GetTopTopics([FromQuery] int? limit = null, CancellationToken cancellationToken = default)
-    {
-        if (limit.HasValue && limit <= 0)
-        {
-            return BadRequest(new { message = "Limit must be greater than 0." });
-        }
+    // ─── GET /api/v1/stats/top ───────────────────────────────────────────────
 
-        var result = await _statsService.GetTopTopicsByActivityAsync(limit, cancellationToken);
-        return Ok(result);
+    [Fact]
+    public async Task GetTopTopics_WithNoLimit_ReturnsOk()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/top");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [HttpGet("ideas/top")]
-    public async Task<IActionResult> GetTopIdeas([FromQuery] string? topicId, [FromQuery] int? limit = null, CancellationToken cancellationToken = default)
+    [Fact]
+    public async Task GetTopTopics_WithMinimumLimit_ReturnsOk()
     {
-        if (limit.HasValue && limit <= 0)
-        {
-            return BadRequest(new { message = "Limit must be greater than 0." });
-        }
+        var client = _factory.CreateClient();
 
-        var result = await _statsService.GetTopIdeasAsync(topicId, limit, cancellationToken);
-        return Ok(result);
+        var response = await client.GetAsync("/api/v1/stats/top?limit=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [HttpGet("topics/{topicId}/ideas/top")]
-    public async Task<IActionResult> GetTopIdeasByTopic([FromRoute] string topicId, [FromQuery] int? limit = null, CancellationToken cancellationToken = default)
+    [Fact]
+    public async Task GetTopTopics_WithNormalLimit_ReturnsOkAndList()
     {
-        if (limit.HasValue && limit <= 0)
-        {
-            return BadRequest(new { message = "Limit must be greater than 0." });
-        }
+        var client = _factory.CreateClient();
 
-        var result = await _statsService.GetTopIdeasAsync(topicId, limit, cancellationToken);
-        return Ok(result);
+        var response = await client.GetAsync("/api/v1/stats/top?limit=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.NotNull(body);
     }
 
-    [HttpGet("users/top")]
-    public async Task<IActionResult> GetTopUsers([FromQuery] int? limit = null, CancellationToken cancellationToken = default)
+    [Fact]
+    public async Task GetTopTopics_WithZeroLimit_ReturnsBadRequest()
     {
-        if (limit.HasValue && limit <= 0)
-        {
-            return BadRequest(new { message = "Limit must be greater than 0." });
-        }
+        var client = _factory.CreateClient();
 
-        var result = await _statsService.GetTopUsersAsync(limit, cancellationToken);
-        return Ok(result);
+        var response = await client.GetAsync("/api/v1/stats/top?limit=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopTopics_WithNegativeLimit_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/top?limit=-1");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ─── GET /api/v1/stats/ideas/top ─────────────────────────────────────────
+
+    [Fact]
+    public async Task GetTopIdeas_WithNoLimit_ReturnsOk()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/ideas/top");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopIdeas_WithMinimumLimit_ReturnsOk()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/ideas/top?limit=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopIdeas_FilteredByTopicId_ReturnsOk()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/stats/ideas/top?topicId={topicId}&limit=5");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopIdeas_WithZeroLimit_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/ideas/top?limit=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ─── GET /api/v1/stats/topics/{topicId}/ideas/top ────────────────────────
+
+    [Fact]
+    public async Task GetTopIdeasByTopic_WithNoLimit_ReturnsOk()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/stats/topics/{topicId}/ideas/top");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopIdeasByTopic_WithMinimumLimit_ReturnsOk()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/stats/topics/{topicId}/ideas/top?limit=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopIdeasByTopic_WithNormalLimit_ReturnsOk()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/stats/topics/{topicId}/ideas/top?limit=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopIdeasByTopic_WithZeroLimit_ReturnsBadRequest()
+    {
+        var topicId = await SeedTopicAsync();
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/stats/topics/{topicId}/ideas/top?limit=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ─── GET /api/v1/stats/users/top ─────────────────────────────────────────
+
+    [Fact]
+    public async Task GetTopUsers_WithNoLimit_ReturnsOk()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/users/top");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopUsers_WithMinimumLimit_ReturnsOk()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/users/top?limit=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetTopUsers_WithNormalLimit_ReturnsOkAndList()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/users/top?limit=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.NotNull(body);
+    }
+
+    [Fact]
+    public async Task GetTopUsers_WithZeroLimit_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/stats/users/top?limit=0");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private async Task<string> SeedTopicAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CisDbContext>();
+
+        var topic = new Topic
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = "Stats topic " + Guid.NewGuid().ToString()[..8],
+            Description = "Topic para pruebas de estadisticas",
+            AuthorId = "stats-author",
+            Type = CIS.BusinessLogic.Domain.TopicType.other,
+            Status = CIS.BusinessLogic.Domain.TopicStatus.active,
+            AllowComments = true,
+            VoteType = "single"
+        };
+
+        context.Topics.Add(topic);
+        await context.SaveChangesAsync();
+
+        return topic.Id;
     }
 }

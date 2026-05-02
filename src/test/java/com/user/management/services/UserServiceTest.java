@@ -15,6 +15,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -168,5 +170,27 @@ class UserServiceTest {
         when(userRepository.save(userEntity)).thenThrow(new DataIntegrityViolationException("Login already exists"));
 
         assertThrows(DataIntegrityViolationException.class, () -> userService.saveUser(request));
+    }
+
+    @Test
+    void loadUserByUsername_existingUser_shouldReturnUserDetails() {
+        User user = new User("1", "Alice", "alice", "encodedPassword", Role.USER);
+        when(userRepository.findByLogin("alice")).thenReturn(Optional.of(user));
+
+        UserDetails result = userService.loadUserByUsername("alice");
+
+        assertNotNull(result);
+        assertEquals("alice", result.getUsername());
+        assertEquals("encodedPassword", result.getPassword());
+        assertTrue(result.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_USER")));
+    }
+
+    @Test
+    void loadUserByUsername_notFound_shouldThrowUsernameNotFoundException() {
+        when(userRepository.findByLogin("unknown")).thenReturn(Optional.empty());
+
+        assertThrows(UsernameNotFoundException.class,
+                () -> userService.loadUserByUsername("unknown"));
     }
 }

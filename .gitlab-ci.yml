@@ -2,6 +2,7 @@ stages:
   - build
   - test
   - coverage
+  - migrate
   - docker
 
 variables:
@@ -69,11 +70,146 @@ coverage_check:
     - develop
     - /^feature\/.*/
 
+db:migrate:mysql:
+  stage: migrate
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  services:
+    - name: mysql:8.0
+      alias: mysql
+  variables:
+    MYSQL_DATABASE: sd3
+    MYSQL_ROOT_PASSWORD: root
+    MYSQL_USER: cis_user
+    MYSQL_PASSWORD: cis_pass
+    ConnectionStrings__DefaultConnection: "Server=mysql;Port=3306;Database=sd3;User=cis_user;Password=cis_pass;AllowUserVariables=true;AllowZeroDateTime=true;"
+  dependencies:
+    - build
+  before_script:
+    - echo "Instalando cliente MySQL para health check..."
+    - apt-get update -qq && apt-get install -y -qq default-mysql-client
+    - echo "Esperando que MySQL esté listo..."
+    - |
+      until mysqladmin ping -h mysql -u root -proot --silent 2>/dev/null; do
+        echo "MySQL no disponible aún, reintentando en 3s..."
+        sleep 3
+      done
+    - echo "MySQL listo."
+    - dotnet tool install --global dotnet-ef
+    - export PATH="$PATH:/root/.dotnet/tools"
+  script:
+    - dotnet restore CIS.Api/CIS.Api.csproj
+    - echo "Migraciones pendientes:" | tee migration_mysql.log
+    - dotnet ef migrations list --project CIS.DataAcces/CIS.DataAcces.csproj --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a migration_mysql.log
+    - echo "Aplicando migraciones → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mysql.log
+    - dotnet ef database update --project CIS.DataAcces/CIS.DataAcces.csproj --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a migration_mysql.log
+    - echo "Migración MySQL completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mysql.log
+  artifacts:
+    name: "cis-migration-mysql-${CI_PIPELINE_ID}"
+    paths:
+      - migration_mysql.log
+    expire_in: 30 days
+    when: always
+  only:
+    - main
+    - develop
+    - /^feature\/.*/
+
+db:migrate:mongodb:
+  stage: migrate
+  image: node:20-slim
+  services:
+    - name: mongo:6.0
+      alias: mongodb
+  variables:
+    MONGODB_URI: "mongodb://mongodb:27017"
+    MONGO_DB_NAME: "sd3"
+  before_script:
+    - echo "Instalando migrate-mongo..."
+    - npm install -g migrate-mongo
+    - echo "Verificando conexión a MongoDB..."
+    - |
+      until node -e "
+        const net = require('net');
+        const s = net.createConnection(27017, 'mongodb');
+        s.on('connect', () => { console.log('MongoDB TCP OK'); s.destroy(); process.exit(0); });
+        s.on('error', () => process.exit(1));
+      " 2>/dev/null; do
+        echo "MongoDB no disponible aún, reintentando en 3s..."
+        sleep 3
+      done
+    - echo "MongoDB listo."
+  script:
+    - echo "Migraciones MongoDB iniciadas → $(date '+%Y-%m-%d %H:%M:%S')" | tee migration_mongo.log
+    - migrate-mongo up 2>&1 | tee -a migration_mongo.log
+    - migrate-mongo status 2>&1 | tee -a migration_mongo.log
+    - echo "Migración MongoDB completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mongo.log
+  artifacts:
+    name: "cis-migration-mongo-${CI_PIPELINE_ID}"
+    paths:
+      - migration_mongo.log
+    expire_in: 30 days
+    when: always
+  only:
+    - main
+    - develop
+    - /^feature\/.*/
+
+db:rollback:
+  stage: migrate
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  services:
+    - name: mysql:8.0
+      alias: mysql
+  variables:
+    MYSQL_DATABASE: sd3
+    MYSQL_ROOT_PASSWORD: root
+    MYSQL_USER: cis_user
+    MYSQL_PASSWORD: cis_pass
+    ConnectionStrings__DefaultConnection: "Server=mysql;Port=3306;Database=sd3;User=cis_user;Password=cis_pass;AllowUserVariables=true;AllowZeroDateTime=true;"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq default-mysql-client
+    - until mysqladmin ping -h mysql -u root -proot --silent 2>/dev/null; do sleep 3; done
+    - dotnet tool install --global dotnet-ef
+    - export PATH="$PATH:/root/.dotnet/tools"
+  script:
+    - dotnet restore CIS.Api/CIS.Api.csproj
+    - echo "ROLLBACK iniciado → $(date '+%Y-%m-%d %H:%M:%S')" | tee rollback.log
+    - |
+      PREV_MIGRATION=$(dotnet ef migrations list \
+        --project CIS.DataAcces/CIS.DataAcces.csproj \
+        --startup-project CIS.Api/CIS.Api.csproj 2>/dev/null \
+        | grep -v "^Build" | grep -v "^\s*$" | tail -2 | head -1 | awk '{print $1}')
+      echo "Revirtiendo a migración anterior: ${PREV_MIGRATION}" | tee -a rollback.log
+      dotnet ef database update "${PREV_MIGRATION}" \
+        --project CIS.DataAcces/CIS.DataAcces.csproj \
+        --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a rollback.log
+    - echo "Estado tras rollback:" | tee -a rollback.log
+    - dotnet ef migrations list --project CIS.DataAcces/CIS.DataAcces.csproj --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a rollback.log
+    - echo "ROLLBACK completado → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a rollback.log
+  artifacts:
+    name: "cis-rollback-${CI_PIPELINE_ID}"
+    paths:
+      - rollback.log
+    expire_in: 30 days
+    when: always
+  when: on_failure
+  needs:
+    - job: db:migrate:mysql
+      optional: true
+    - job: db:migrate:mongodb
+      optional: true
+  only:
+    - main
+    - develop
+    - /^feature\/.*/
+
 docker_build:
   stage: docker
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
+  needs:
+    - job: build
   script:
     - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG -f CIS.Api/Dockerfile .
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY

@@ -152,7 +152,9 @@
                   "pm.test('Status 201', () => pm.response.to.have.status(201));",
                   "const json = pm.response.json();",
                   "pm.test('Tiene id', () => pm.expect(json.id).to.be.a('string').and.not.empty);",
-                  "pm.test('Rol es USER', () => pm.expect(json.role).to.eql('USER'));"
+                  "pm.test('Rol es USER', () => pm.expect(json.role).to.eql('USER'));",
+                  "pm.environment.set('userLogin', json.login);",
+                  "pm.environment.set('userPassword', 'User@1234');"
                 ]
               }
             }
@@ -569,6 +571,27 @@
         {
           "name": "DELETE /v1/users/:id - Sin permiso (403)",
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const baseUrl = pm.environment.get('baseUrl');",
+                  "const userLogin = pm.environment.get('userLogin');",
+                  "const userPassword = pm.environment.get('userPassword');",
+                  "pm.sendRequest({",
+                  "  url: baseUrl + '/v1/auth/login',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ login: userLogin, password: userPassword }) }",
+                  "}, (err, res) => {",
+                  "  if (!err && res.code === 200) {",
+                  "    pm.environment.set('tokenUser', res.json().token);",
+                  "  }",
+                  "});"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {

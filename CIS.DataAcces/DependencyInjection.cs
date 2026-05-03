@@ -4,7 +4,7 @@ using CIS.DataAcces.MongoDB.Repositories;
 using CIS.DataAcces.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-
+using Microsoft.EntityFrameworkCore;
 namespace CIS.DataAcces;
 
 public static class DependencyInjection
@@ -27,6 +27,13 @@ public static class DependencyInjection
         IServiceCollection services,
         IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        services.AddDbContext<CisDbContext>(options =>
+            options.UseMySql(
+                connectionString,
+                ServerVersion.AutoDetect(connectionString)
+            ));
         services.AddScoped<ITopicRepository,   TopicRepository>();
         services.AddScoped<IIdeaRepository,    IdeaRepository>();
         services.AddScoped<ICommentRepository, CommentRepository>();

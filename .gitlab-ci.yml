@@ -134,13 +134,16 @@ db_migrate:
     paths:
       - scripts/mysql_to_mongo/migration_state.json
     expire_in: 1 hour
-  only:
-    - /^feature\/.*$/
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature\//'
+      when: on_success
+    - when: never
 
 db_rollback:
   stage: migrate
   image: python:3.12-slim
-  when: on_failure
   needs:
     - job: db_migrate
       artifacts: true
@@ -156,5 +159,9 @@ db_rollback:
   script:
     - echo "Iniciando rollback de la última migración..."
     - python scripts/mysql_to_mongo/mysql_to_mongo.py rollback
-  only:
-    - /^feature\/.*$/
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
+      when: on_failure
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature\//'
+      when: on_failure
+    - when: never

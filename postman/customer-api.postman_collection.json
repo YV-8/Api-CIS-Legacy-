@@ -1,0 +1,629 @@
+{
+  "info": {
+    "name": "Customer API - User Management",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "description": "Coleccion Postman para customer-api (user-management-ms). Cubre autenticacion JWT y operaciones CRUD completas sobre usuarios. El token se extrae automaticamente al hacer login y se aplica en todas las requests protegidas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "POST /v1/auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Respuesta tiene token', () => pm.expect(json.token).to.be.a('string').and.not.empty);",
+                  "pm.test('Tipo es Bearer', () => pm.expect(json.type).to.eql('Bearer'));",
+                  "pm.test('Tiene rol', () => pm.expect(json.role).to.be.oneOf(['ADMIN', 'OWNER', 'USER']));",
+                  "pm.environment.set('token', json.token);",
+                  "pm.collectionVariables.set('userId', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{login}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "login"]
+            },
+            "description": "Autentica un usuario y devuelve un JWT. El token se guarda automaticamente en la variable de coleccion `token`."
+          }
+        },
+        {
+          "name": "POST /v1/auth/login - Credenciales invalidas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"usuario_inexistente\",\n  \"password\": \"password_incorrecta\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "login"]
+            },
+            "description": "Verifica que credenciales invalidas devuelvan 401 Unauthorized."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Users - CREATE",
+      "item": [
+        {
+          "name": "POST /v1/users - Crear usuario ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Tiene id', () => pm.expect(json.id).to.be.a('string').and.not.empty);",
+                  "pm.test('Nombre correcto', () => pm.expect(json.name).to.eql('Test Admin'));",
+                  "pm.test('Login correcto', () => pm.expect(json.login).to.be.a('string'));",
+                  "pm.test('Rol es ADMIN', () => pm.expect(json.role).to.eql('ADMIN'));",
+                  "pm.test('No expone password', () => pm.expect(json).to.not.have.property('password'));",
+                  "pm.environment.set('userId', json.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Admin\",\n  \"login\": \"testadmin_{{$timestamp}}\",\n  \"password\": \"Admin@1234\",\n  \"role\": \"ADMIN\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Crea un nuevo usuario con rol ADMIN. Requiere token JWT de un ADMIN u OWNER. El id generado se guarda en `userId`."
+          }
+        },
+        {
+          "name": "POST /v1/users - Crear usuario USER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Tiene id', () => pm.expect(json.id).to.be.a('string').and.not.empty);",
+                  "pm.test('Rol es USER', () => pm.expect(json.role).to.eql('USER'));",
+                  "pm.environment.set('userLogin', json.login);",
+                  "pm.environment.set('userPassword', 'User@1234');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"login\": \"testuser_{{$timestamp}}\",\n  \"password\": \"User@1234\",\n  \"role\": \"USER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Crea un nuevo usuario con rol USER. Requiere token JWT de un ADMIN u OWNER."
+          }
+        },
+        {
+          "name": "POST /v1/users - Crear usuario OWNER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Rol es OWNER', () => pm.expect(json.role).to.eql('OWNER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Owner\",\n  \"login\": \"testowner_{{$timestamp}}\",\n  \"password\": \"Owner@1234\",\n  \"role\": \"OWNER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Crea un nuevo usuario con rol OWNER. Requiere token JWT de un ADMIN u OWNER."
+          }
+        },
+        {
+          "name": "POST /v1/users - Login duplicado (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409 Conflict', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Usuario Duplicado\",\n  \"login\": \"{{login}}\",\n  \"password\": \"Dup@1234\",\n  \"role\": \"USER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Intenta crear un usuario con un login ya existente. Espera 409 Conflict."
+          }
+        },
+        {
+          "name": "POST /v1/users - Campos requeridos faltantes (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sin Login\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Envia un body sin campos requeridos. Espera 400 Bad Request."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Users - READ",
+      "item": [
+        {
+          "name": "GET /v1/users - Listar todos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Respuesta es array', () => pm.expect(json).to.be.an('array'));",
+                  "pm.test('Elementos tienen id, name, login, role', () => {",
+                  "  if (json.length > 0) {",
+                  "    pm.expect(json[0]).to.have.all.keys('id', 'name', 'login', 'role');",
+                  "    pm.expect(json[0]).to.not.have.property('password');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Obtiene la lista de todos los usuarios. Requiere token JWT. Accesible para USER, ADMIN y OWNER."
+          }
+        },
+        {
+          "name": "GET /v1/users/:id - Obtener por ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('ID coincide', () => pm.expect(json.id).to.eql(pm.environment.get('userId')));",
+                  "pm.test('Tiene campos requeridos', () => pm.expect(json).to.have.all.keys('id', 'name', 'login', 'role'));",
+                  "pm.test('No expone password', () => pm.expect(json).to.not.have.property('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "{{userId}}"]
+            },
+            "description": "Obtiene un usuario por su UUID. Usa el `userId` guardado en la coleccion. Requiere token JWT."
+          }
+        },
+        {
+          "name": "GET /v1/users/:id - ID inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "Busca un UUID que no existe en la base de datos. Espera 404 Not Found."
+          }
+        },
+        {
+          "name": "GET /v1/users - Sin token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users"]
+            },
+            "description": "Intenta listar usuarios sin JWT. Espera 401 Unauthorized."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Users - UPDATE",
+      "item": [
+        {
+          "name": "PUT /v1/users/:id - Actualizar nombre",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Nombre actualizado', () => pm.expect(json.name).to.eql('Nombre Actualizado'));",
+                  "pm.test('ID no cambia', () => pm.expect(json.id).to.eql(pm.environment.get('userId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nombre Actualizado\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "{{userId}}"]
+            },
+            "description": "Actualiza solo el nombre del usuario. Todos los campos son opcionales (PATCH semantics). Requiere token JWT de ADMIN, OWNER o USER."
+          }
+        },
+        {
+          "name": "PUT /v1/users/:id - Actualizar login y password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('No expone password', () => pm.expect(json).to.not.have.property('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"updated_{{$timestamp}}\",\n  \"password\": \"NewPass@5678\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "{{userId}}"]
+            },
+            "description": "Actualiza login y password del usuario. El password se almacena encriptado con BCrypt."
+          }
+        },
+        {
+          "name": "PUT /v1/users/:id - Actualizar rol",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Rol actualizado', () => pm.expect(json.role).to.eql('USER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"USER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "{{userId}}"]
+            },
+            "description": "Cambia el rol del usuario a USER. Requiere token de ADMIN u OWNER."
+          }
+        },
+        {
+          "name": "PUT /v1/users/:id - ID inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No Existe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "Intenta actualizar un usuario con UUID inexistente. Espera 404 Not Found."
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Users - DELETE",
+      "item": [
+        {
+          "name": "DELETE /v1/users/:id - Eliminar usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.test('Body vacio', () => pm.expect(pm.response.text()).to.be.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "{{userId}}"]
+            },
+            "description": "Elimina el usuario con el ID guardado en la coleccion. Requiere token JWT de ADMIN u OWNER. Devuelve 204 sin body."
+          }
+        },
+        {
+          "name": "DELETE /v1/users/:id - ID inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "Intenta eliminar un UUID inexistente. Espera 404 Not Found."
+          }
+        },
+        {
+          "name": "DELETE /v1/users/:id - Sin permiso (403)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const baseUrl = pm.environment.get('baseUrl');",
+                  "const userLogin = pm.environment.get('userLogin');",
+                  "const userPassword = pm.environment.get('userPassword');",
+                  "pm.sendRequest({",
+                  "  url: baseUrl + '/v1/auth/login',",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({ login: userLogin, password: userPassword }) }",
+                  "}, (err, res) => {",
+                  "  if (!err && res.code === 200) {",
+                  "    pm.environment.set('tokenUser', res.json().token);",
+                  "  }",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenUser}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "users", "{{userId}}"]
+            },
+            "description": "Intenta eliminar un usuario usando un token de rol USER (sin permiso). Espera 403 Forbidden. Requiere establecer `tokenUser` manualmente con un JWT de rol USER."
+          }
+        }
+      ]
+    }
+  ]
+}

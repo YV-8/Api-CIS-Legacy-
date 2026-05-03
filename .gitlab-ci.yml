@@ -139,8 +139,8 @@ db:migrate:mongodb:
     - echo "MongoDB listo."
   script:
     - echo "Migraciones MongoDB iniciadas → $(date '+%Y-%m-%d %H:%M:%S')" | tee migration_mongo.log
-    - migrate-mongo up --config migrate-mongo-config.js 2>&1 | tee -a migration_mongo.log
-    - migrate-mongo status --config migrate-mongo-config.js 2>&1 | tee -a migration_mongo.log
+    - migrate-mongo up 2>&1 | tee -a migration_mongo.log
+    - migrate-mongo status 2>&1 | tee -a migration_mongo.log
     - echo "Migración MongoDB completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mongo.log
   artifacts:
     name: "cis-migration-mongo-${CI_PIPELINE_ID}"

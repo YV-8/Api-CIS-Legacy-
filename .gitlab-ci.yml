@@ -110,6 +110,7 @@ db:migrate:mysql:
   only:
     - main
     - develop
+    - /^feature\/.*/
 
 db:migrate:mongodb:
   stage: migrate
@@ -150,6 +151,7 @@ db:migrate:mongodb:
   only:
     - main
     - develop
+    - /^feature\/.*/
 
 db:rollback:
   stage: migrate
@@ -193,6 +195,7 @@ db:rollback:
   only:
     - main
     - develop
+    - /^feature\/.*/
 
 docker_build:
   stage: docker

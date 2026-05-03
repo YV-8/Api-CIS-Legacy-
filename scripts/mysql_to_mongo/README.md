@@ -128,6 +128,7 @@ El script lee automáticamente el `.env` de la raíz del proyecto.
 | `MONGODB_URI` | URI de conexión a MongoDB | `mongodb://localhost:27017` |
 | `MONGO_DB_NAME` | Nombre de la base de datos MongoDB | `sd3` |
 | `MONGODB_TLS` | Habilita TLS en la conexión MongoDB (`true`/`false`) | `false` |
+| `MYSQL_TLS` | Habilita TLS en la conexión MySQL (`true`/`false`) | `true` |
 
 ---
 

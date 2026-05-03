@@ -200,6 +200,7 @@ def connect_mysql(args: argparse.Namespace) -> pymysql.Connection:
         sys.exit(1)
 
     log.info("Conectando a MySQL  %s:%s  /  base: %s", args.mysql_host, args.mysql_port, args.mysql_db)
+    use_ssl = _env("MYSQL_TLS", "true").lower() == "true"
     try:
         conn = pymysql.connect(
             host=args.mysql_host,
@@ -210,6 +211,7 @@ def connect_mysql(args: argparse.Namespace) -> pymysql.Connection:
             charset="utf8mb4",
             cursorclass=pymysql.cursors.DictCursor,
             connect_timeout=10,
+            ssl={"ssl": {}} if use_ssl else None,
         )
         log.info("Conexión MySQL  ✓")
         return conn

@@ -113,14 +113,14 @@ db_migrate:
     - |
       echo "Esperando a que MySQL esté listo..."
       for i in $(seq 1 30); do
-        mysqladmin ping -h mysql -uroot -proot --silent --ssl-mode=DISABLED 2>/dev/null && echo "MySQL listo." && break
+        mysqladmin ping -h mysql -uroot -proot --silent --skip-ssl 2>/dev/null && echo "MySQL listo." && break
         echo "  Intento $i/30 — esperando 2s..."
         sleep 2
       done
     - |
       echo "Aplicando schema e insertando datos de prueba..."
-      mysql -h mysql -uroot -proot --ssl-mode=DISABLED sd3 < src/main/resources/db/migration/V1__init_schema.sql
-      mysql -h mysql -uroot -proot --ssl-mode=DISABLED sd3 -e "
+      mysql -h mysql -uroot -proot --skip-ssl sd3 < src/main/resources/db/migration/V1__init_schema.sql
+      mysql -h mysql -uroot -proot --skip-ssl sd3 -e "
         INSERT IGNORE INTO users (id, name, login, password, role) VALUES
           ('uuid-ci-1', 'Alice Admin', 'alice', 'hashed_pw_1', 'ADMIN'),
           ('uuid-ci-2', 'Bob Owner',  'bob',   'hashed_pw_2', 'OWNER'),

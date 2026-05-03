@@ -109,6 +109,15 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Flyway para migraciones MySQL -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -169,6 +178,27 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <plugin>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-maven-plugin</artifactId>
+            <version>10.10.0</version>
+            <!-- Driver MySQL dentro del plugin -->
+            <dependencies>
+                <dependency>
+                    <groupId>com.mysql</groupId>
+                    <artifactId>mysql-connector-j</artifactId>
+                    <version>8.3.0</version>
+                </dependency>
+            </dependencies>
+            <configuration>
+                <locations>
+                    <location>filesystem:src/main/resources/db/migration</location>
+                </locations>
+                <baselineOnMigrate>true</baselineOnMigrate>
+                <baselineVersion>0</baselineVersion>
+            </configuration>
+        </plugin>
 
         </plugins>
     </build>

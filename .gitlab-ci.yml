@@ -2,6 +2,7 @@ stages:
   - test
   - coverage
   - build
+  - migrate
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
@@ -75,3 +76,94 @@ build_image:
   only:
     - main
     - tags
+
+# ─── Migración MySQL → MongoDB ────────────────────────────────────────────────
+
+db_migrate:
+  stage: migrate
+  image: python:3.12-slim
+  needs:
+    - job: coverage
+  services:
+    - name: mysql:8.0
+      alias: mysql
+    - name: mongo:7.0
+      alias: mongo
+  variables:
+    # MySQL service
+    MYSQL_ROOT_PASSWORD: root
+    MYSQL_DATABASE: sd3
+    MYSQL_USER: migration_user
+    MYSQL_PASSWORD: migration_pass
+    # Script de migración
+    MYSQL_HOST: mysql
+    MYSQL_PORT: "3306"
+    DB_NAME: sd3
+    DB_USERNAME: migration_user
+    DB_PASSWORD: migration_pass
+    # MongoDB
+    MONGODB_URI: "mongodb://mongo:27017"
+    MONGODB_TLS: "false"
+    MONGO_DB_NAME: sd3
+    # Deshabilitar TLS en MySQL para entorno CI con self-signed cert
+    MYSQL_TLS: "false"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq default-mysql-client
+    - pip install --quiet -r scripts/mysql_to_mongo/requirements.txt
+    - |
+      echo "Esperando a que MySQL esté listo..."
+      for i in $(seq 1 30); do
+        mysqladmin ping -h mysql -uroot -proot --silent --skip-ssl 2>/dev/null && echo "MySQL listo." && break
+        echo "  Intento $i/30 — esperando 2s..."
+        sleep 2
+      done
+    - |
+      echo "Aplicando schema e insertando datos de prueba..."
+      mysql -h mysql -uroot -proot --skip-ssl sd3 < src/main/resources/db/migration/V1__init_schema.sql
+      mysql -h mysql -uroot -proot --skip-ssl sd3 -e "
+        INSERT IGNORE INTO users (id, name, login, password, role) VALUES
+          ('uuid-ci-1', 'Alice Admin', 'alice', 'hashed_pw_1', 'ADMIN'),
+          ('uuid-ci-2', 'Bob Owner',  'bob',   'hashed_pw_2', 'OWNER'),
+          ('uuid-ci-3', 'Carol User', 'carol', 'hashed_pw_3', 'USER');
+      "
+  script:
+    - echo "Verificando conectividad..."
+    - python scripts/mysql_to_mongo/mysql_to_mongo.py check
+    - echo "Ejecutando migración con verificación de integridad..."
+    - python scripts/mysql_to_mongo/mysql_to_mongo.py migrate --verify
+  artifacts:
+    when: always
+    paths:
+      - scripts/mysql_to_mongo/migration_state.json
+    expire_in: 1 hour
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature\//'
+      when: on_success
+    - when: never
+
+db_rollback:
+  stage: migrate
+  image: python:3.12-slim
+  needs:
+    - job: db_migrate
+      artifacts: true
+  services:
+    - name: mongo:7.0
+      alias: mongo
+  variables:
+    MONGODB_URI: "mongodb://mongo:27017"
+    MONGODB_TLS: "false"
+    MONGO_DB_NAME: sd3
+  before_script:
+    - pip install --quiet -r scripts/mysql_to_mongo/requirements.txt
+  script:
+    - echo "Iniciando rollback de la última migración..."
+    - python scripts/mysql_to_mongo/mysql_to_mongo.py rollback
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\//'
+      when: on_failure
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^feature\//'
+      when: on_failure
+    - when: never

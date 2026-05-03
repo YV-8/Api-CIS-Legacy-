@@ -200,6 +200,7 @@ def connect_mysql(args: argparse.Namespace) -> pymysql.Connection:
         sys.exit(1)
 
     log.info("Conectando a MySQL  %s:%s  /  base: %s", args.mysql_host, args.mysql_port, args.mysql_db)
+    use_ssl = _env("MYSQL_TLS", "true").lower() == "true"
     try:
         conn = pymysql.connect(
             host=args.mysql_host,
@@ -210,6 +211,7 @@ def connect_mysql(args: argparse.Namespace) -> pymysql.Connection:
             charset="utf8mb4",
             cursorclass=pymysql.cursors.DictCursor,
             connect_timeout=10,
+            ssl={"ssl": {}} if use_ssl else None,
         )
         log.info("Conexión MySQL  ✓")
         return conn
@@ -230,14 +232,13 @@ def fetch_users(conn: pymysql.Connection) -> list[dict]:
 
 def connect_mongo(args: argparse.Namespace) -> MongoClient:
     log.info("Conectando a MongoDB  %s", _safe_uri(args.mongo_uri))
+    use_tls = _env("MONGODB_TLS", "false").lower() == "true"
     try:
-        client = MongoClient(
-            args.mongo_uri,
-            serverSelectionTimeoutMS=10_000,
-            tls=True,
-            tlsCAFile=certifi.where(),
-            tlsAllowInvalidCertificates=True,
-        )
+        client_kwargs: dict = {"serverSelectionTimeoutMS": 10_000}
+        if use_tls:
+            client_kwargs["tls"] = True
+            client_kwargs["tlsCAFile"] = certifi.where()
+        client = MongoClient(args.mongo_uri, **client_kwargs)
         client.admin.command("ping")
         log.info("Conexión MongoDB  ✓")
         return client
@@ -435,7 +436,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     pre_existing_ids = snapshot_existing_ids(collection)
 
     # 5. Índice único en login
-    collection.create_index("login", unique=True, background=True)
+    collection.create_index("login", unique=True)
 
     # 6. Migrar en batches
     documents = [mysql_row_to_document(row) for row in users]

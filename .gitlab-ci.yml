@@ -96,10 +96,11 @@ db:migrate:mysql:
     - dotnet tool install --global dotnet-ef
     - export PATH="$PATH:/root/.dotnet/tools"
   script:
+    - dotnet restore CIS.Api/CIS.Api.csproj
     - echo "Migraciones pendientes:" | tee migration_mysql.log
-    - dotnet ef migrations list --project CIS.Api/CIS.Api.csproj >> migration_mysql.log 2>&1
+    - dotnet ef migrations list --project CIS.DataAcces/CIS.DataAcces.csproj --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a migration_mysql.log
     - echo "Aplicando migraciones → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mysql.log
-    - dotnet ef database update --project CIS.Api/CIS.Api.csproj >> migration_mysql.log 2>&1
+    - dotnet ef database update --project CIS.DataAcces/CIS.DataAcces.csproj --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a migration_mysql.log
     - echo "Migración MySQL completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mysql.log
   artifacts:
     name: "cis-migration-mysql-${CI_PIPELINE_ID}"
@@ -122,16 +123,15 @@ db:migrate:mongodb:
     MONGODB_URI: "mongodb://mongodb:27017"
     MONGO_DB_NAME: "sd3"
   before_script:
-    - echo "Instalando dependencias..."
+    - echo "Instalando migrate-mongo..."
     - npm install -g migrate-mongo
-    - npm install mongodb
-    - echo "Esperando que MongoDB esté listo..."
+    - echo "Verificando conexión a MongoDB..."
     - |
       until node -e "
-        const { MongoClient } = require('mongodb');
-        MongoClient.connect(process.env.MONGODB_URI)
-          .then(() => { console.log('MongoDB OK'); process.exit(0); })
-          .catch(() => process.exit(1));
+        const net = require('net');
+        const s = net.createConnection(27017, 'mongodb');
+        s.on('connect', () => { console.log('MongoDB TCP OK'); s.destroy(); process.exit(0); });
+        s.on('error', () => process.exit(1));
       " 2>/dev/null; do
         echo "MongoDB no disponible aún, reintentando en 3s..."
         sleep 3
@@ -139,8 +139,8 @@ db:migrate:mongodb:
     - echo "MongoDB listo."
   script:
     - echo "Migraciones MongoDB iniciadas → $(date '+%Y-%m-%d %H:%M:%S')" | tee migration_mongo.log
-    - migrate-mongo up --config migrate-mongo-config.js >> migration_mongo.log 2>&1
-    - migrate-mongo status --config migrate-mongo-config.js >> migration_mongo.log 2>&1
+    - migrate-mongo up --config migrate-mongo-config.js 2>&1 | tee -a migration_mongo.log
+    - migrate-mongo status --config migrate-mongo-config.js 2>&1 | tee -a migration_mongo.log
     - echo "Migración MongoDB completada → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a migration_mongo.log
   artifacts:
     name: "cis-migration-mongo-${CI_PIPELINE_ID}"
@@ -171,14 +171,19 @@ db:rollback:
     - dotnet tool install --global dotnet-ef
     - export PATH="$PATH:/root/.dotnet/tools"
   script:
+    - dotnet restore CIS.Api/CIS.Api.csproj
     - echo "ROLLBACK iniciado → $(date '+%Y-%m-%d %H:%M:%S')" | tee rollback.log
     - |
-      PREV_MIGRATION=$(dotnet ef migrations list --project CIS.Api/CIS.Api.csproj 2>/dev/null \
+      PREV_MIGRATION=$(dotnet ef migrations list \
+        --project CIS.DataAcces/CIS.DataAcces.csproj \
+        --startup-project CIS.Api/CIS.Api.csproj 2>/dev/null \
         | grep -v "^Build" | grep -v "^\s*$" | tail -2 | head -1 | awk '{print $1}')
       echo "Revirtiendo a migración anterior: ${PREV_MIGRATION}" | tee -a rollback.log
-      dotnet ef database update "${PREV_MIGRATION}" --project CIS.Api/CIS.Api.csproj >> rollback.log 2>&1
+      dotnet ef database update "${PREV_MIGRATION}" \
+        --project CIS.DataAcces/CIS.DataAcces.csproj \
+        --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a rollback.log
     - echo "Estado tras rollback:" | tee -a rollback.log
-    - dotnet ef migrations list --project CIS.Api/CIS.Api.csproj >> rollback.log 2>&1
+    - dotnet ef migrations list --project CIS.DataAcces/CIS.DataAcces.csproj --startup-project CIS.Api/CIS.Api.csproj 2>&1 | tee -a rollback.log
     - echo "ROLLBACK completado → $(date '+%Y-%m-%d %H:%M:%S')" | tee -a rollback.log
   artifacts:
     name: "cis-rollback-${CI_PIPELINE_ID}"

@@ -1,0 +1,115 @@
+@CIS.Api_HostAddress = http://localhost:5109
+@AuthToken = OBTENER_TOKEN_DEL_ENDPOINT_DE_DEBUG
+
+### FLUJO DE PRUEBA
+### 1. Ejecuta GET {{CIS.Api_HostAddress}}/auth/debug-token (ver abajo)
+### 2. Copia el token de la respuesta JSON (campo "token")
+### 3. Pega el token en la variable @AuthToken arriba
+### 4. Ejecuta los ejemplos de POST con ese token
+### =====================================================
+
+### OBTENER TOKEN JWT VÁLIDO (solo para pruebas en local hasta implementar la validacion frente al servicio de users)
+### EJECUTA ESTA REQUEST PRIMERO PARA OBTENER UN TOKEN VÁLIDO
+### Copia el token de la respuesta y reemplázalo en @AuthToken arriba
+
+GET {{CIS.Api_HostAddress}}/auth/debug-token
+Accept: application/json
+
+###
+
+### Ejemplo 1: Crear topic SIN autenticación (fallará)
+POST {{CIS.Api_HostAddress}}/api/v1/topics
+Content-Type: application/json
+
+{
+  "title": "Mi Primer Tópico",
+  "description": "Esta es una descripción detallada que debe tener al menos 10 caracteres."
+}
+
+###
+
+### Ejemplo 2: Crear topic CON autenticación (éxitoso)
+### El token debe incluirse en el header Authorization
+POST {{CIS.Api_HostAddress}}/api/v1/topics
+Content-Type: application/json
+Authorization: Bearer {{AuthToken}}
+
+{
+  "title": "Encuesta sobre Preferencias de Café",
+  "description": "¿Cuál es tu tipo de café favorito? Este tema es para recopilar opiniones de la comunidad sobre sus preferencias de bebidas calientes."
+}
+
+###
+
+### Ejemplo 3: Crear topic - Validación (title muy corto, fallará)
+POST {{CIS.Api_HostAddress}}/api/v1/topics
+Content-Type: application/json
+Authorization: Bearer {{AuthToken}}
+
+{
+  "title": "Café",
+  "description": "Una descripción normal aquí."
+}
+
+###
+
+### Ejemplo 4: Crear topic - Validación (description muy corta, fallará)
+POST {{CIS.Api_HostAddress}}/api/v1/topics
+Content-Type: application/json
+Authorization: Bearer {{AuthToken}}
+
+{
+  "title": "Tópico de Mercado",
+  "description": "Corta"
+}
+
+###
+
+### Ejemplo 5: Crear topic - Caso exitoso con más detalles
+POST {{CIS.Api_HostAddress}}/api/v1/topics
+Content-Type: application/json
+Authorization: Bearer {{AuthToken}}
+
+{
+  "title": "Investigación de Mercado sobre Tecnología",
+  "description": "En este tema queremos explorar las tendencias actuales en tecnología, incluyendo inteligencia artificial, computación en la nube y seguridad cibernética."
+}
+
+###
+
+### BUSCAR TOPICS CREADOS (sin autenticación)
+
+GET {{CIS.Api_HostAddress}}/api/v1/topics?page=0&size=10
+Accept: application/json
+
+###
+
+### GET topics filtered by authorId
+GET {{CIS.Api_HostAddress}}/api/v1/topics?authorId=user123&page=0&size=10
+Accept: application/json
+
+###
+
+### GET topics with date range filter
+GET {{CIS.Api_HostAddress}}/api/v1/topics?createdFrom=2024-01-01&createdTo=2024-12-31&page=0&size=10
+Accept: application/json
+
+###
+
+### GET topics sorted by createdAt descending
+GET {{CIS.Api_HostAddress}}/api/v1/topics?sort=createdAt,desc&page=0&size=10
+Accept: application/json
+
+###
+
+### GET topics with combined filters and sorting
+GET {{CIS.Api_HostAddress}}/api/v1/topics?authorId=user123&createdFrom=2024-01-01&sort=createdAt,desc&page=0&size=5
+Accept: application/json
+
+###
+
+### GET out of range page (should return empty content)
+GET {{CIS.Api_HostAddress}}/api/v1/topics?page=999&size=10
+Accept: application/json
+
+###
